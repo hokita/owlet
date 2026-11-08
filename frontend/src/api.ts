@@ -5,11 +5,13 @@ export interface Hello {
   visits: number
 }
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? ''
-
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const token = await auth.currentUser?.getIdToken()
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const baseUrl = import.meta.env.VITE_API_URL
+  if (!baseUrl) throw new Error('VITE_API_URL is not set')
+  const user = auth.currentUser
+  if (!user) throw new Error('Not signed in')
+  const token = await user.getIdToken()
+  const res = await fetch(`${baseUrl}${path}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',

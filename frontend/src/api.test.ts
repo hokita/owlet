@@ -1,16 +1,27 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-vi.mock('./firebase', () => ({
-  auth: { currentUser: { getIdToken: vi.fn().mockResolvedValue('fake-token') } },
+const mockAuth = vi.hoisted(() => ({
+  currentUser: { getIdToken: vi.fn().mockResolvedValue('fake-token') } as {
+    getIdToken: () => Promise<string>
+  } | null,
 }))
+vi.mock('./firebase', () => ({ auth: mockAuth }))
 
 import { api } from './api'
 
 const mockFetch = vi.fn()
 vi.stubGlobal('fetch', mockFetch)
 
+const signedInUser = mockAuth.currentUser
+
 beforeEach(() => {
   mockFetch.mockReset()
+  mockAuth.currentUser = signedInUser
+  vi.stubEnv('VITE_API_URL', 'http://api.test')
+})
+
+afterEach(() => {
+  vi.unstubAllEnvs()
 })
 
 describe('api.getHello', () => {
@@ -32,5 +43,17 @@ describe('api.getHello', () => {
   it('throws on a non-OK response', async () => {
     mockFetch.mockResolvedValue({ ok: false, status: 401 })
     await expect(api.getHello()).rejects.toThrow('API error: 401')
+  })
+
+  it('throws without calling fetch when signed out', async () => {
+    mockAuth.currentUser = null
+    await expect(api.getHello()).rejects.toThrow('Not signed in')
+    expect(mockFetch).not.toHaveBeenCalled()
+  })
+
+  it('throws without calling fetch when VITE_API_URL is not set', async () => {
+    vi.stubEnv('VITE_API_URL', '')
+    await expect(api.getHello()).rejects.toThrow('VITE_API_URL is not set')
+    expect(mockFetch).not.toHaveBeenCalled()
   })
 })
