@@ -49,7 +49,7 @@ Mirrors hamster exactly in shape:
 
 - Signed out: a "Sign in with Google" button.
 - Signed in: shows the API's message and visit count, plus a sign-out button.
-- API error (e.g. 403 for a non-allowlisted email): shows the error message.
+- API error (e.g. 401 for a non-allowlisted email, matching hamster): shows the error message.
 
 ## Local development
 
