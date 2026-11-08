@@ -15,7 +15,7 @@ export default defineConfig({
     {
       command: `${path.resolve(__dirname, 'node_modules/.bin/firebase')} emulators:start --project demo-owlet-e2e --only auth,firestore`,
       cwd: path.resolve(__dirname, '..'),
-      port: 8081,
+      url: 'http://localhost:9099',
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
     },
