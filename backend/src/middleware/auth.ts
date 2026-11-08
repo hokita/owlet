@@ -27,11 +27,18 @@ export async function authMiddleware(
       !decoded.email_verified ||
       !allowedEmails().has(decoded.email.toLowerCase())
     ) {
+      console.warn('Rejected sign-in:', {
+        uid: decoded.uid,
+        email: decoded.email,
+        emailVerified: decoded.email_verified,
+      })
       res.status(401).json({ error: 'Unauthorized' })
       return
     }
     next()
-  } catch {
+  } catch (err) {
+    const e = err as { code?: string; message?: string }
+    console.warn('verifyIdToken failed:', e.code ?? e.message)
     res.status(401).json({ error: 'Invalid token' })
   }
 }
