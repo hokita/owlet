@@ -72,8 +72,8 @@ Mirrors hamster exactly in shape:
 4. Artifact Registry repo `owlet` (Docker, `asia-northeast1`) with a cleanup policy keeping the 2 most recent images.
 5. Secret `ALLOWED_EMAILS` = the owner's email.
 6. Firebase web app registration (for client config).
-7. Workload Identity Federation: pool `github-pool`, provider `github-provider` restricted to `hokita/owlet`, service account `github-actions-deploy` with `roles/run.admin`, `roles/artifactregistry.writer`, `roles/iam.serviceAccountUser`, `roles/firebasehosting.admin`, `roles/serviceusage.serviceUsageViewer` (hamster's set) plus `roles/firebaserules.admin` and `roles/datastore.indexAdmin` for the Firestore rules/indexes deploy.
-   Cloud Run runtime service account (default compute SA): `roles/secretmanager.secretAccessor`, `roles/datastore.user`.
+7. Workload Identity Federation: pool `github-pool`, provider `github-provider` restricted to `hokita/owlet` on `refs/heads/main` (`assertion.repository == 'hokita/owlet' && assertion.ref == 'refs/heads/main'`), service account `github-actions-deploy` with project roles `roles/run.admin`, `roles/artifactregistry.writer`, `roles/firebasehosting.admin`, `roles/serviceusage.serviceUsageViewer` (hamster's set) plus `roles/firebaserules.admin` and `roles/datastore.indexAdmin` for the Firestore rules/indexes deploy. `roles/iam.serviceAccountUser` is granted on the runtime service account only, not project-wide.
+   Cloud Run runtime service account (default compute SA): `roles/secretmanager.secretAccessor`, `roles/datastore.user`. No `roles/editor`.
 8. GitHub secrets `WIF_PROVIDER`, `WIF_SERVICE_ACCOUNT` on `hokita/owlet`.
 9. Budget alert at ¥100 on the billing account, scoped to the project.
 
