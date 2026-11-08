@@ -1,5 +1,7 @@
 import express from 'express'
 import cors from 'cors'
+import { authMiddleware } from './middleware/auth'
+import { createHelloRouter } from './routes/hello'
 
 export function createApp() {
   const app = express()
@@ -9,5 +11,6 @@ export function createApp() {
   app.use(cors({ origin: process.env.FRONTEND_URL || '*' }))
   app.use(express.json())
   app.get('/health', (_req, res) => res.json({ ok: true }))
+  app.use('/api/hello', authMiddleware, createHelloRouter())
   return app
 }
