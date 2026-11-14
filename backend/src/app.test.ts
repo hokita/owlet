@@ -9,8 +9,8 @@ describe('app', () => {
     expect(res.body).toEqual({ ok: true })
   })
 
-  it('GET /api/hello without a token returns 401', async () => {
-    const res = await request(createApp()).get('/api/hello')
+  it('GET /api/reviews without a token returns 401', async () => {
+    const res = await request(createApp()).get('/api/reviews/2026/11')
     expect(res.status).toBe(401)
   })
 })

@@ -1,8 +1,9 @@
 import { auth } from './firebase'
+import type { YearMonth } from './month'
+import type { Note, NoteType } from './notes'
 
-export interface Hello {
-  message: string
-  visits: number
+export interface Review extends YearMonth {
+  notes: Note[]
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
@@ -20,9 +21,16 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     },
   })
   if (!res.ok) throw new Error(`API error: ${res.status}`)
+  if (res.status === 204) return undefined as T
   return res.json()
 }
 
+const reviewPath = ({ year, month }: YearMonth) => `/api/reviews/${year}/${month}`
+
 export const api = {
-  getHello: () => request<Hello>('/api/hello'),
+  getReview: (ym: YearMonth) => request<Review>(reviewPath(ym)),
+  addNote: (ym: YearMonth, input: { type: NoteType; text: string }) =>
+    request<Note>(`${reviewPath(ym)}/notes`, { method: 'POST', body: JSON.stringify(input) }),
+  deleteNote: (ym: YearMonth, id: string) =>
+    request<void>(`${reviewPath(ym)}/notes/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 }
