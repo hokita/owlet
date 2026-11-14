@@ -39,13 +39,14 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
   const [pendingNote, setPendingNote] = useState<Note | null>(null)
   const pending = useRef<{ note: Note; timer: ReturnType<typeof setTimeout> } | null>(null)
 
-  const sendPendingDelete = useCallback(() => {
+  // Resolves once the delete request has settled (failures are handled here).
+  const sendPendingDelete = useCallback((): Promise<void> => {
     const current = pending.current
-    if (!current) return
+    if (!current) return Promise.resolve()
     clearTimeout(current.timer)
     pending.current = null
     setPendingNote(null)
-    api.deleteNote(month, current.note.id).catch((e: Error) => {
+    return api.deleteNote(month, current.note.id).catch((e: Error) => {
       setNotes((prev) => (prev ? mergeNotes(prev, [current.note]) : prev))
       setError(`Could not delete: ${e.message}`)
     })
@@ -83,6 +84,13 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
     setNotes((prev) => prev?.filter((n) => n.id !== note.id) ?? prev)
     pending.current = { note, timer: setTimeout(sendPendingDelete, UNDO_MS) }
     setPendingNote(note)
+  }
+
+  // The delete needs the ID token, so send it while still signed in rather
+  // than leaving it to the unmount flush, which runs after sign-out.
+  async function handleSignOut() {
+    await sendPendingDelete()
+    await signOut(auth)
   }
 
   function handleUndo() {
@@ -153,7 +161,7 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
         <div className="flex justify-end">
           <button
             type="button"
-            onClick={() => signOut(auth)}
+            onClick={handleSignOut}
             className="min-h-11 cursor-pointer px-2 text-sm text-gray-500"
           >
             Sign out

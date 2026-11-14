@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, act, within } from '@testing-library/react'
+import { render, screen, fireEvent, act, within, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
 
 const { mockSignOut, mockApi } = vi.hoisted(() => ({
@@ -196,9 +196,23 @@ describe('MonthPage', () => {
     })
   })
 
+  it('sends a pending delete before signing out', async () => {
+    await renderLoaded()
+    let finishDelete: () => void = () => {}
+    mockApi.deleteNote.mockReturnValue(new Promise<void>((resolve) => (finishDelete = resolve)))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete "Trip"' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
+
+    expect(mockApi.deleteNote).toHaveBeenCalledWith(november, 'n1')
+    expect(mockSignOut).not.toHaveBeenCalled()
+
+    await act(async () => finishDelete())
+    expect(mockSignOut).toHaveBeenCalledWith({ name: 'auth' })
+  })
+
   it('signs out through Firebase', async () => {
     await renderLoaded([])
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
-    expect(mockSignOut).toHaveBeenCalledWith({ name: 'auth' })
+    await waitFor(() => expect(mockSignOut).toHaveBeenCalledWith({ name: 'auth' }))
   })
 })
