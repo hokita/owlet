@@ -2,17 +2,19 @@
 
 ## Overview
 
-Let LLM agents running in a terminal (Muse, Claude Code, …) save notes to owlet on the owner's behalf, through a small CLI and a long-lived API token. Single user — the owner. The design was decided by the orchestrator; this document records it plus the calls made while building it.
+Let LLM agents save notes to owlet on the owner's behalf with a long-lived API token. Single user — the owner. The design was decided by the orchestrator; this document records it plus the calls made while building it.
+
+**2026-11-14 update:** the CLI was removed. The owner's client, Muse (Meta's iPhone app), calls the API directly through a custom connector, so a CLI was an unused feature. See `docs/superpowers/plans/2026-11-14-remove-cli.md`.
 
 ## Goals
 
-- `owlet add <event|learn|next> "text" [--month YYYY-MM]` from any terminal.
+- An agent adds a note with one authenticated `POST`, no browser sign-in.
 - Notes saved this way are marked and shown with a small badge in the month page.
 - Shipping this must not break the deploy before the owner has created the token secret.
 
 ## Non-goals
 
-- MCP server (may come later as a thin wrapper over the CLI).
+- MCP server.
 - Listing, editing or deleting notes with the token.
 - Multiple tokens, token rotation tooling, per-agent identity.
 
@@ -40,19 +42,17 @@ Let LLM agents running in a terminal (Muse, Claude Code, …) save notes to owle
 
 API notes show a small grey "agent" badge after the text (`aria-label="Added by an agent"`). Nothing else changes.
 
-## CLI (`cli/`)
-
-Node 24 + TypeScript, built with `tsc`, installed with `npm link` (`owlet` on PATH).
+## API for agents
 
 ```
-owlet add <event|learn|next> "text" [--month YYYY-MM]
+POST https://owlet-backend-185845390027.asia-northeast1.run.app/api/reviews/{year}/{month}/notes
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{"type": "event" | "learn" | "next", "text": "<one line, ≤ 500 chars>"}
 ```
 
-- Month defaults to the current month in Asia/Tokyo.
-- Token: `OWLET_TOKEN`, else macOS Keychain `security find-generic-password -s owlet -w`. Missing → clear error explaining both options.
-- Base URL: `OWLET_API_URL`, default the production backend.
-- Success prints `Saved <type> to YYYY-MM: <text>`; failures print the server's `error` with the status and exit 1; usage errors exit 2.
-- Client-side checks (type, non-empty text, month format) give fast feedback; the server stays the authority.
+`201` with the saved note (`"source": "api"`); `400 { error }` for invalid input; `401` for a missing or wrong token; `429` with `Retry-After` when rate limited. The client (Muse's custom connector) picks the year and month.
 
 ## Deploy
 
@@ -62,7 +62,6 @@ owlet add <event|learn|next> "text" [--month YYYY-MM]
 
 - Backend: token comparison/config, rate limiter, combined auth middleware, route `source` handling, service `source` storage/defaulting, and app-level tests proving the token is rejected on GET/DELETE and accepted on POST.
 - Frontend: badge shown only for `source: 'api'`.
-- CLI: argument parsing (incl. Asia/Tokyo default month), token lookup order, HTTP client errors, end-to-end `main()` with fakes.
 - E2E: a token POST shows up with the badge; the token is rejected on GET.
 
 ## Approaches considered (rate limit / deploy wiring)
@@ -73,5 +72,4 @@ owlet add <event|learn|next> "text" [--month YYYY-MM]
 ## Calls made by Claude
 
 - Minimum token length 43 characters; shorter disables token auth with a warning.
-- Badge text "agent"; CLI env names `OWLET_TOKEN` / `OWLET_API_URL`; repo variable `OWLET_API_TOKEN_SECRET`.
-- No `--json` output flag yet.
+- Badge text "agent"; repo variable `OWLET_API_TOKEN_SECRET`.
