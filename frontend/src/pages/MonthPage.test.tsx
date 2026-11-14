@@ -72,6 +72,44 @@ describe('MonthPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not load: API error: 401')
   })
 
+  describe('when loading fails', () => {
+    const added = { id: 'n4', type: 'next', text: 'Read', createdAt: '2026-11-04T00:00:00.000Z' }
+
+    async function renderFailedLoad() {
+      mockApi.getReview.mockRejectedValueOnce(new Error('API error: 500'))
+      render(<MonthPage month={november} onNavigate={vi.fn()} />)
+      await screen.findByRole('button', { name: 'Retry' })
+    }
+
+    it('keeps the load error and shows no partial month after adding a note', async () => {
+      await renderFailedLoad()
+      mockApi.addNote.mockResolvedValue(added)
+      addNote('Read')
+      await waitFor(() => expect(screen.getByRole('textbox', { name: 'New note' })).toHaveValue(''))
+
+      expect(screen.getByRole('alert')).toHaveTextContent('Could not load: API error: 500')
+      expect(screen.queryByRole('region', { name: 'Events' })).not.toBeInTheDocument()
+      expect(screen.queryByText('Nothing yet')).not.toBeInTheDocument()
+    })
+
+    it('Retry loads the month, including notes added meanwhile', async () => {
+      await renderFailedLoad()
+      mockApi.addNote.mockResolvedValue(added)
+      addNote('Read')
+      await waitFor(() => expect(mockApi.addNote).toHaveBeenCalled())
+
+      mockApi.getReview.mockResolvedValueOnce({ ...november, notes: [trip, firestore] })
+      fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+
+      await screen.findByRole('region', { name: 'Events' })
+      expect(within(section('Events')).getByText('Trip')).toBeInTheDocument()
+      expect(within(section('Learns')).getByText('Firestore')).toBeInTheDocument()
+      expect(within(section('Nexts')).getByText('Read')).toBeInTheDocument()
+      expect(mockApi.getReview).toHaveBeenCalledTimes(2)
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+  })
+
   it('goes to the previous and next month', async () => {
     const onNavigate = vi.fn()
     await renderLoaded([], onNavigate)

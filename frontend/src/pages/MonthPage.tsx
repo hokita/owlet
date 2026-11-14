@@ -36,7 +36,14 @@ interface MonthPageProps {
 // Rendered with `key` = the month, so switching months remounts it: state
 // starts fresh, a stale load is ignored, and a pending delete is sent.
 export default function MonthPage({ month, onNavigate }: MonthPageProps) {
-  const [notes, setNotes] = useState<Note[] | null>(null)
+  // `notes` can hold notes added before the month has loaded; they're only
+  // shown once a load succeeds, so a partial list never passes for the month.
+  const [notes, setNotes] = useState<Note[]>([])
+  const [loaded, setLoaded] = useState(false)
+  // Kept apart from add/delete errors: it stays up, with Retry, until a load
+  // succeeds, whatever else happens meanwhile.
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadAttempt, setLoadAttempt] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [pendingNote, setPendingNote] = useState<Note | null>(null)
   const pending = useRef<{ note: Note; timer: ReturnType<typeof setTimeout> } | null>(null)
@@ -50,7 +57,7 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
     pending.current = null
     setPendingNote(null)
     return api.deleteNote(month, current.note.id).catch((e: Error) => {
-      setNotes((prev) => (prev ? mergeNotes(prev, [current.note]) : prev))
+      setNotes((prev) => mergeNotes(prev, [current.note]))
       setError(`Could not delete: ${e.message}`)
     })
   }, [month])
@@ -60,21 +67,23 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
     api
       .getReview(month)
       .then((review) => {
-        if (!cancelled) setNotes((prev) => mergeNotes(prev ?? [], review.notes))
+        if (cancelled) return
+        setNotes((prev) => mergeNotes(prev, review.notes))
+        setLoaded(true)
       })
       .catch((e: Error) => {
-        if (!cancelled) setError(`Could not load: ${e.message}`)
+        if (!cancelled) setLoadError(`Could not load: ${e.message}`)
       })
     return () => {
       cancelled = true
       sendPendingDelete()
     }
-  }, [month, sendPendingDelete])
+  }, [month, loadAttempt, sendPendingDelete])
 
   async function handleAdd(input: { type: NoteType; text: string }) {
     try {
       const note = await api.addNote(month, input)
-      setNotes((prev) => mergeNotes(prev ?? [], [note]))
+      setNotes((prev) => mergeNotes(prev, [note]))
       setError(null)
     } catch (e) {
       setError(`Could not add: ${(e as Error).message}`)
@@ -84,7 +93,7 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
 
   function handleDelete(note: Note) {
     sendPendingDelete()
-    setNotes((prev) => prev?.filter((n) => n.id !== note.id) ?? prev)
+    setNotes((prev) => prev.filter((n) => n.id !== note.id))
     pending.current = { note, timer: setTimeout(sendPendingDelete, UNDO_MS) }
     setPendingNote(note)
   }
@@ -102,7 +111,12 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
     clearTimeout(current.timer)
     pending.current = null
     setPendingNote(null)
-    setNotes((prev) => (prev ? mergeNotes(prev, [current.note]) : prev))
+    setNotes((prev) => mergeNotes(prev, [current.note]))
+  }
+
+  function handleRetry() {
+    setLoadError(null)
+    setLoadAttempt((n) => n + 1)
   }
 
   return (
@@ -130,14 +144,30 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
       </header>
 
       <main className="mx-auto max-w-2xl px-4 pt-4 pb-44">
+        {loadError && (
+          <div
+            role="alert"
+            className="mb-4 flex items-center justify-between gap-4 rounded-lg bg-red-50 py-1 pr-1 pl-4 text-sm text-red-700"
+          >
+            <span>{loadError}</span>
+            <button
+              type="button"
+              onClick={handleRetry}
+              className="min-h-11 cursor-pointer rounded-lg px-4 font-semibold"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         {error && (
           <p role="alert" className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
           </p>
         )}
 
-        {notes === null
-          ? !error && <p className="text-sm text-gray-500">Loading…</p>
+        {!loaded
+          ? !loadError && <p className="text-sm text-gray-500">Loading…</p>
           : SECTIONS.map(({ type, title }) => {
               const items = notes.filter((n) => n.type === type)
               return (
