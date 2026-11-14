@@ -68,6 +68,16 @@ export default function NoteRow({ note, onDelete }: NoteRowProps) {
         }`}
       >
         <span className="min-w-0 flex-1 text-base wrap-anywhere">{note.text}</span>
+        {note.source === 'api' && (
+          <span
+            role="img"
+            aria-label="Added by an agent"
+            title="Added by an agent"
+            className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500"
+          >
+            agent
+          </span>
+        )}
         {/* On touch-only devices the swipe is the visible way to delete, but the
             swipe is raw touch that screen readers can't perform, so the button
             stays in the accessibility tree (sr-only) and shows when focused. */}

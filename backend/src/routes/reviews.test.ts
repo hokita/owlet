@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import request from 'supertest'
 import express from 'express'
+import type { RequestHandler } from 'express'
 
 vi.mock('../services/reviews', () => ({
   NOTE_TYPES: ['event', 'learn', 'next'],
@@ -12,12 +13,38 @@ vi.mock('../services/reviews', () => ({
 import { addNote, deleteNote, listNotes } from '../services/reviews'
 import { createReviewsRouter } from './reviews'
 
-const app = express().use(express.json()).use('/api/reviews', createReviewsRouter())
+const pass: RequestHandler = (_req, _res, next) => next()
+const app = express()
+  .use(express.json())
+  .use('/api/reviews', createReviewsRouter({ userAuth: pass, noteAuth: pass }))
 
 const note = { id: 'n1', type: 'event', text: 'Trip', createdAt: '2026-11-14T00:00:00.000Z' }
 
 describe('reviews routes', () => {
   beforeEach(() => vi.clearAllMocks())
+
+  it('guards GET and DELETE with userAuth and POST with noteAuth', async () => {
+    const deny =
+      (name: string): RequestHandler =>
+      (_req, res) => {
+        res.status(401).json({ error: name })
+      }
+    const guarded = express()
+      .use(express.json())
+      .use(
+        '/api/reviews',
+        createReviewsRouter({ userAuth: deny('userAuth'), noteAuth: deny('noteAuth') })
+      )
+    expect((await request(guarded).get('/api/reviews/2026/11')).body).toEqual({
+      error: 'userAuth',
+    })
+    expect((await request(guarded).delete('/api/reviews/2026/11/notes/n1')).body).toEqual({
+      error: 'userAuth',
+    })
+    expect((await request(guarded).post('/api/reviews/2026/11/notes')).body).toEqual({
+      error: 'noteAuth',
+    })
+  })
 
   describe('GET /api/reviews/:year/:month', () => {
     it('returns the notes for the month', async () => {
@@ -60,7 +87,23 @@ describe('reviews routes', () => {
         .send({ type: 'event', text: '  Trip  ' })
       expect(res.status).toBe(201)
       expect(res.body).toEqual(note)
-      expect(addNote).toHaveBeenCalledWith(2026, 11, { type: 'event', text: 'Trip' })
+      expect(addNote).toHaveBeenCalledWith(2026, 11, { type: 'event', text: 'Trip', source: 'app' })
+    })
+
+    it('saves notes from API token requests with source api', async () => {
+      vi.mocked(addNote).mockResolvedValue(note as never)
+      const asApi: RequestHandler = (_req, res, next) => {
+        res.locals.authSource = 'api'
+        next()
+      }
+      const apiApp = express()
+        .use(express.json())
+        .use('/api/reviews', createReviewsRouter({ userAuth: pass, noteAuth: asApi }))
+      const res = await request(apiApp)
+        .post('/api/reviews/2026/11/notes')
+        .send({ type: 'next', text: 'Read' })
+      expect(res.status).toBe(201)
+      expect(addNote).toHaveBeenCalledWith(2026, 11, { type: 'next', text: 'Read', source: 'api' })
     })
 
     it.each([
