@@ -17,7 +17,6 @@ Personal monthly review app — successor to hokita/owl.
 owlet/
 ├── frontend/   # React app
 ├── backend/    # Express API
-├── cli/        # `owlet` CLI for agents to add notes
 └── e2e/        # Playwright end-to-end tests
 ```
 
@@ -54,8 +53,6 @@ Locally, sign-in goes through the Auth emulator's fake identity picker, so use t
 ```sh
 (cd backend && npm test)
 (cd frontend && npm test)
-(cd cli && npm test)
-(cd cli && npm install && npm run build)  # e2e runs the built CLI
 (cd e2e && npm install && npx playwright install --with-deps chromium && npm test)
 (cd e2e && npm run test:servers-stopped)  # after a run that started its own servers: fails if any were left running
 ```
