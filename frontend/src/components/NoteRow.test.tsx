@@ -6,6 +6,7 @@ const note = {
   id: 'n1',
   type: 'event' as const,
   text: 'Trip',
+  source: 'app' as const,
   createdAt: '2026-11-14T00:00:00.000Z',
 }
 
@@ -19,6 +20,16 @@ describe('NoteRow', () => {
   it('shows the note text', () => {
     render(<NoteRow note={note} onDelete={vi.fn()} />)
     expect(screen.getByText('Trip')).toBeInTheDocument()
+  })
+
+  it('marks notes added by an agent', () => {
+    render(<NoteRow note={{ ...note, source: 'api' }} onDelete={vi.fn()} />)
+    expect(screen.getByLabelText('Added by an agent')).toHaveTextContent('agent')
+  })
+
+  it('has no agent mark on app notes', () => {
+    render(<NoteRow note={note} onDelete={vi.fn()} />)
+    expect(screen.queryByLabelText('Added by an agent')).not.toBeInTheDocument()
   })
 
   it('deletes on a long swipe left', () => {
