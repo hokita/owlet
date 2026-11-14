@@ -10,6 +10,9 @@ vi.mock('firebase/auth', () => ({ signOut: mockSignOut }))
 vi.mock('../firebase', () => ({ auth: { name: 'auth' } }))
 vi.mock('../api', () => ({ api: mockApi }))
 
+const { mockKeyboardInset } = vi.hoisted(() => ({ mockKeyboardInset: vi.fn(() => 0) }))
+vi.mock('../useKeyboardInset', () => ({ useKeyboardInset: mockKeyboardInset }))
+
 import MonthPage from './MonthPage'
 
 const november = { year: 2026, month: 11 }
@@ -43,6 +46,7 @@ describe('MonthPage', () => {
     vi.clearAllMocks()
     localStorage.clear()
     mockApi.deleteNote.mockResolvedValue(undefined)
+    mockKeyboardInset.mockReturnValue(0)
   })
 
   afterEach(() => {
@@ -154,6 +158,13 @@ describe('MonthPage', () => {
       await act(async () => vi.advanceTimersByTime(5000))
       expect(mockApi.deleteNote).toHaveBeenCalledWith(november, 'n1')
       expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    })
+
+    it('lifts the Undo toast above the on-screen keyboard', async () => {
+      mockKeyboardInset.mockReturnValue(300)
+      await renderLoaded()
+      fireEvent.click(screen.getByRole('button', { name: 'Delete "Trip"' }))
+      expect(screen.getByRole('status').style.getPropertyValue('--keyboard-inset')).toBe('300px')
     })
 
     it('Undo puts the row back in place and never deletes', async () => {

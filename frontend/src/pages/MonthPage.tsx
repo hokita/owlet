@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
 import { signOut } from 'firebase/auth'
 import { auth } from '../firebase'
 import { api } from '../api'
@@ -7,6 +8,7 @@ import type { YearMonth } from '../month'
 import type { Note, NoteType } from '../notes'
 import Composer from '../components/Composer'
 import NoteRow from '../components/NoteRow'
+import { useKeyboardInset } from '../useKeyboardInset'
 
 // How long a deleted note can be brought back before the delete is sent.
 const UNDO_MS = 5000
@@ -38,6 +40,7 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
   const [error, setError] = useState<string | null>(null)
   const [pendingNote, setPendingNote] = useState<Note | null>(null)
   const pending = useRef<{ note: Note; timer: ReturnType<typeof setTimeout> } | null>(null)
+  const keyboardInset = useKeyboardInset()
 
   // Resolves once the delete request has settled (failures are handled here).
   const sendPendingDelete = useCallback((): Promise<void> => {
@@ -170,9 +173,11 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
       </main>
 
       {pendingNote && (
+        // Sits just above the Composer, which is lifted by the same keyboard inset.
         <div
           role="status"
-          className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+7.5rem)] z-20 flex justify-center px-4"
+          style={{ '--keyboard-inset': `${keyboardInset}px` } as CSSProperties}
+          className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+7.5rem+var(--keyboard-inset))] z-20 flex justify-center px-4"
         >
           <div className="flex items-center gap-4 rounded-full bg-gray-900 py-1 pr-1 pl-5 text-sm text-white shadow-lg">
             <span>Deleted</span>
