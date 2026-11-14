@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "test": "playwright test",
+    "test:servers-stopped": "node scripts/assert-servers-stopped.mjs",
     "test:ui": "playwright test --ui",
     "report": "playwright show-report"
   },
