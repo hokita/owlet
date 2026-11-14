@@ -64,7 +64,17 @@ jobs:
           tags: asia-northeast1-docker.pkg.dev/owlet-c659da/owlet/backend:latest
 
       - name: Deploy to Cloud Run
+        env:
+          # Name of the Secret Manager secret holding OWLET_API_TOKEN. Cloud Run
+          # fails a deploy that references a missing secret, so agent token auth
+          # is wired in only once the owner has created it and set this repo
+          # variable (see README, "Agent notes").
+          API_TOKEN_SECRET: ${{ vars.OWLET_API_TOKEN_SECRET }}
         run: |
+          SECRETS="ALLOWED_EMAILS=ALLOWED_EMAILS:latest"
+          if [ -n "$API_TOKEN_SECRET" ]; then
+            SECRETS="$SECRETS,OWLET_API_TOKEN=${API_TOKEN_SECRET}:latest"
+          fi
           gcloud run deploy owlet-backend \
             --image asia-northeast1-docker.pkg.dev/owlet-c659da/owlet/backend:latest \
             --region asia-northeast1 \
@@ -72,4 +82,4 @@ jobs:
             --min-instances 0 \
             --max-instances 2 \
             --set-env-vars "FIREBASE_PROJECT_ID=owlet-c659da,FRONTEND_URL=https://owlet-c659da.web.app" \
-            --set-secrets "ALLOWED_EMAILS=ALLOWED_EMAILS:latest"
+            --set-secrets "$SECRETS"
