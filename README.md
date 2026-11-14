@@ -54,6 +54,7 @@ Locally, sign-in goes through the Auth emulator's fake identity picker, so use t
 (cd backend && npm test)
 (cd frontend && npm test)
 (cd e2e && npm install && npx playwright install --with-deps chromium && npm test)
+(cd e2e && npm run test:servers-stopped)  # after a run that started its own servers: fails if any were left running
 ```
 
 ## Deploy
