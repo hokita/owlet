@@ -67,7 +67,7 @@ export default function NoteRow({ note, onDelete }: NoteRowProps) {
           offset === 0 ? 'transition-transform duration-200' : ''
         }`}
       >
-        <span className="flex-1 break-words text-base">{note.text}</span>
+        <span className="min-w-0 flex-1 text-base wrap-anywhere">{note.text}</span>
         {/* On touch-only devices the swipe is the visible way to delete, but the
             swipe is raw touch that screen readers can't perform, so the button
             stays in the accessibility tree (sr-only) and shows when focused. */}

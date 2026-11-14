@@ -55,6 +55,30 @@ test('Undo keeps the note', async ({ page }) => {
   await expect(page.getByText(`keep ${run}`)).toBeVisible()
 })
 
+test.describe('at iPhone width', () => {
+  test.use({ viewport: { width: 390, height: 844 } })
+
+  test('a long unbroken note wraps and keeps Delete inside the row', async ({ page }) => {
+    await signIn(page)
+    await page.goto('/2001/5')
+    const text = `https://example.com/${'a'.repeat(120)}?run=${run}`
+    const input = page.getByRole('textbox', { name: 'New note' })
+    await input.fill(text)
+    await input.press('Enter')
+
+    const textEl = page.getByText(text)
+    await expect(textEl).toBeVisible()
+    const row = page.getByRole('listitem').filter({ has: textEl })
+    const rowBox = (await row.boundingBox())!
+    const buttonBox = (await row.getByRole('button', { name: `Delete "${text}"` }).boundingBox())!
+
+    expect(buttonBox.x).toBeGreaterThanOrEqual(rowBox.x)
+    expect(buttonBox.x + buttonBox.width).toBeLessThanOrEqual(rowBox.x + rowBox.width)
+    // Wrapped, not overflowing its own box (which the row would clip).
+    expect(await textEl.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true)
+  })
+})
+
 test.describe('on a touch-only phone', () => {
   test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } })
 
