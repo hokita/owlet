@@ -46,14 +46,32 @@ describe('listNotes', () => {
           id: 'n1',
           data: () => ({ type: 'event', text: 'Trip', createdAt: now }),
         },
+        {
+          id: 'n2',
+          data: () => ({ type: 'next', text: 'Read', createdAt: now, source: 'api' }),
+        },
       ],
     })
 
     const notes = await listNotes(2026, 3)
 
     expect(orderBy).toHaveBeenCalledWith('reviews/2026-03/notes', 'createdAt', 'asc')
+    // Notes saved before `source` existed read as 'app'.
     expect(notes).toEqual([
-      { id: 'n1', type: 'event', text: 'Trip', createdAt: '2026-11-14T01:02:03.000Z' },
+      {
+        id: 'n1',
+        type: 'event',
+        text: 'Trip',
+        source: 'app',
+        createdAt: '2026-11-14T01:02:03.000Z',
+      },
+      {
+        id: 'n2',
+        type: 'next',
+        text: 'Read',
+        source: 'api',
+        createdAt: '2026-11-14T01:02:03.000Z',
+      },
     ])
   })
 })
@@ -62,7 +80,7 @@ describe('addNote', () => {
   beforeEach(() => vi.clearAllMocks())
 
   it('writes the review and the note in one batch', async () => {
-    const note = await addNote(2026, 11, { type: 'learn', text: 'Firestore' })
+    const note = await addNote(2026, 11, { type: 'learn', text: 'Firestore', source: 'api' })
 
     expect(batch.set).toHaveBeenCalledWith(
       expect.objectContaining({ path: 'reviews/2026-11' }),
@@ -71,13 +89,14 @@ describe('addNote', () => {
     )
     expect(batch.set).toHaveBeenCalledWith(
       expect.objectContaining({ path: 'reviews/2026-11/notes/new-id' }),
-      { type: 'learn', text: 'Firestore', createdAt: now }
+      { type: 'learn', text: 'Firestore', source: 'api', createdAt: now }
     )
     expect(batch.commit).toHaveBeenCalled()
     expect(note).toEqual({
       id: 'new-id',
       type: 'learn',
       text: 'Firestore',
+      source: 'api',
       createdAt: '2026-11-14T01:02:03.000Z',
     })
   })

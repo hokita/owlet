@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import type { Request, Response } from 'express'
+import type { Request, RequestHandler, Response } from 'express'
 import { NOTE_TYPES, addNote, deleteNote, listNotes } from '../services/reviews'
 import type { NoteType } from '../services/reviews'
 
@@ -29,10 +29,18 @@ function internalError(res: Response, message: string, err: unknown) {
   res.status(500).json({ error: 'Internal error' })
 }
 
-export function createReviewsRouter(): Router {
+// userAuth guards everything; noteAuth guards adding a note, the one route an
+// agent's API token may use (it sets res.locals.authSource = 'api').
+export function createReviewsRouter({
+  userAuth,
+  noteAuth,
+}: {
+  userAuth: RequestHandler
+  noteAuth: RequestHandler
+}): Router {
   const router = Router()
 
-  router.get('/:year/:month', async (req, res) => {
+  router.get('/:year/:month', userAuth, async (req, res) => {
     const ym = parseMonth(req)
     if (!ym) {
       res.status(400).json({ error: 'Invalid month' })
@@ -46,7 +54,7 @@ export function createReviewsRouter(): Router {
     }
   })
 
-  router.post('/:year/:month/notes', async (req, res) => {
+  router.post('/:year/:month/notes', noteAuth, async (req, res) => {
     const ym = parseMonth(req)
     if (!ym) {
       res.status(400).json({ error: 'Invalid month' })
@@ -63,14 +71,15 @@ export function createReviewsRouter(): Router {
       return
     }
     try {
-      const note = await addNote(ym.year, ym.month, { type, text })
+      const source = res.locals.authSource === 'api' ? 'api' : 'app'
+      const note = await addNote(ym.year, ym.month, { type, text, source })
       res.status(201).json(note)
     } catch (err) {
       internalError(res, 'Failed to add note', err)
     }
   })
 
-  router.delete('/:year/:month/notes/:id', async (req, res) => {
+  router.delete('/:year/:month/notes/:id', userAuth, async (req, res) => {
     const ym = parseMonth(req)
     if (!ym) {
       res.status(400).json({ error: 'Invalid month' })
