@@ -87,6 +87,53 @@ describe('MonthPage', () => {
     expect(mockApi.addNote).toHaveBeenCalledWith(november, { type: 'next', text: 'Read' })
   })
 
+  describe('adding before the month has loaded', () => {
+    const added = { id: 'n4', type: 'event', text: 'Early', createdAt: '2026-11-04T00:00:00.000Z' }
+
+    // Both requests are held open so each test can choose which response lands first.
+    function renderWithPendingRequests() {
+      let resolveLoad: (review: unknown) => void = () => {}
+      let resolveAdd: (note: unknown) => void = () => {}
+      mockApi.getReview.mockReturnValue(new Promise((resolve) => (resolveLoad = resolve)))
+      mockApi.addNote.mockReturnValue(new Promise((resolve) => (resolveAdd = resolve)))
+      render(<MonthPage month={november} onNavigate={vi.fn()} />)
+      return {
+        finishLoad: (notes: unknown[]) => act(async () => resolveLoad({ ...november, notes })),
+        finishAdd: () => act(async () => resolveAdd(added)),
+      }
+    }
+
+    it('shows the note once when the load lands first and already includes it', async () => {
+      const { finishLoad, finishAdd } = renderWithPendingRequests()
+      addNote('Early')
+      await finishLoad([trip, added])
+      await finishAdd()
+
+      expect(within(section('Events')).getAllByText('Early')).toHaveLength(1)
+      expect(within(section('Events')).getByText('Trip')).toBeInTheDocument()
+    })
+
+    it('shows the note once when the add lands first and the load includes it', async () => {
+      const { finishLoad, finishAdd } = renderWithPendingRequests()
+      addNote('Early')
+      await finishAdd()
+      await finishLoad([trip, added])
+
+      expect(within(section('Events')).getAllByText('Early')).toHaveLength(1)
+      expect(within(section('Events')).getByText('Trip')).toBeInTheDocument()
+    })
+
+    it('keeps the note when the load does not include it yet', async () => {
+      const { finishLoad, finishAdd } = renderWithPendingRequests()
+      addNote('Early')
+      await finishAdd()
+      await finishLoad([trip])
+
+      expect(await within(section('Events')).findByText('Early')).toBeInTheDocument()
+      expect(within(section('Events')).getByText('Trip')).toBeInTheDocument()
+    })
+  })
+
   it('shows an error when adding fails', async () => {
     await renderLoaded([])
     mockApi.addNote.mockRejectedValue(new Error('API error: 500'))

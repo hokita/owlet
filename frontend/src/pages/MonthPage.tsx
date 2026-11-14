@@ -17,8 +17,13 @@ const SECTIONS: { type: NoteType; title: string }[] = [
   { type: 'next', title: 'Nexts' },
 ]
 
-function insertSorted(notes: Note[], note: Note): Note[] {
-  return [...notes, note].sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+// Combines note lists by id. A note added before the month finishes loading
+// can arrive both from the POST and in the GET, in either order, so every
+// update merges instead of appending or replacing.
+function mergeNotes(current: Note[], incoming: Note[]): Note[] {
+  const byId = new Map(current.map((n) => [n.id, n]))
+  for (const note of incoming) byId.set(note.id, note)
+  return [...byId.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt))
 }
 
 interface MonthPageProps {
@@ -41,7 +46,7 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
     pending.current = null
     setPendingNote(null)
     api.deleteNote(month, current.note.id).catch((e: Error) => {
-      setNotes((prev) => (prev ? insertSorted(prev, current.note) : prev))
+      setNotes((prev) => (prev ? mergeNotes(prev, [current.note]) : prev))
       setError(`Could not delete: ${e.message}`)
     })
   }, [month])
@@ -51,7 +56,7 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
     api
       .getReview(month)
       .then((review) => {
-        if (!cancelled) setNotes(review.notes)
+        if (!cancelled) setNotes((prev) => mergeNotes(prev ?? [], review.notes))
       })
       .catch((e: Error) => {
         if (!cancelled) setError(`Could not load: ${e.message}`)
@@ -65,7 +70,7 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
   async function handleAdd(input: { type: NoteType; text: string }) {
     try {
       const note = await api.addNote(month, input)
-      setNotes((prev) => insertSorted(prev ?? [], note))
+      setNotes((prev) => mergeNotes(prev ?? [], [note]))
       setError(null)
     } catch (e) {
       setError(`Could not add: ${(e as Error).message}`)
@@ -86,7 +91,7 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
     clearTimeout(current.timer)
     pending.current = null
     setPendingNote(null)
-    setNotes((prev) => (prev ? insertSorted(prev, current.note) : prev))
+    setNotes((prev) => (prev ? mergeNotes(prev, [current.note]) : prev))
   }
 
   return (
