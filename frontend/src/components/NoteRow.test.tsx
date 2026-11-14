@@ -37,6 +37,18 @@ describe('NoteRow', () => {
     expect(screen.getByTestId('note-row-content').style.transform).toBe('translateX(0px)')
   })
 
+  it('does not delete when a long swipe is canceled, and snaps back', () => {
+    const onDelete = vi.fn()
+    render(<NoteRow note={note} onDelete={onDelete} />)
+    const row = screen.getByText('Trip')
+    fireEvent.touchStart(row, { touches: [{ clientX: 300, clientY: 0 }] })
+    fireEvent.touchMove(row, { touches: [{ clientX: 150, clientY: 0 }] })
+    fireEvent.touchCancel(row, { changedTouches: [{ clientX: 150, clientY: 0 }] })
+
+    expect(onDelete).not.toHaveBeenCalled()
+    expect(screen.getByTestId('note-row-content').style.transform).toBe('translateX(0px)')
+  })
+
   it('ignores a swipe right', () => {
     const onDelete = vi.fn()
     render(<NoteRow note={note} onDelete={onDelete} />)

@@ -34,11 +34,15 @@ export default function NoteRow({ note, onDelete }: NoteRowProps) {
     if (direction.current === 'horizontal') setOffset(Math.min(0, dx))
   }
 
-  function handleTouchEnd() {
-    const shouldDelete = direction.current === 'horizontal' && offset <= -DELETE_THRESHOLD
+  function resetGesture() {
     start.current = null
     direction.current = null
     setOffset(0)
+  }
+
+  function handleTouchEnd() {
+    const shouldDelete = direction.current === 'horizontal' && offset <= -DELETE_THRESHOLD
+    resetGesture()
     if (shouldDelete) onDelete()
   }
 
@@ -55,7 +59,9 @@ export default function NoteRow({ note, onDelete }: NoteRowProps) {
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        onTouchCancel={handleTouchEnd}
+        // A canceled gesture (system interrupt, incoming call) is not a finished
+        // swipe, so it never deletes.
+        onTouchCancel={resetGesture}
         style={{ transform: `translateX(${offset}px)` }}
         className={`relative flex min-h-11 items-center gap-2 bg-white px-4 py-2 touch-pan-y ${
           offset === 0 ? 'transition-transform duration-200' : ''
