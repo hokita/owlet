@@ -62,11 +62,14 @@ export default function NoteRow({ note, onDelete }: NoteRowProps) {
         }`}
       >
         <span className="flex-1 break-words text-base">{note.text}</span>
+        {/* On touch-only devices the swipe is the visible way to delete, but the
+            swipe is raw touch that screen readers can't perform, so the button
+            stays in the accessibility tree (sr-only) and shows when focused. */}
         <button
           type="button"
           onClick={onDelete}
           aria-label={`Delete "${note.text}"`}
-          className="shrink-0 cursor-pointer rounded px-2 py-1 text-sm text-red-600 opacity-0 hover:bg-red-50 focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:hidden"
+          className="shrink-0 cursor-pointer rounded px-2 py-1 text-sm text-red-600 opacity-0 hover:bg-red-50 focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:sr-only [@media(hover:none)]:focus:not-sr-only [@media(hover:none)]:focus:opacity-100"
         >
           Delete
         </button>

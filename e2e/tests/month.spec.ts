@@ -55,6 +55,28 @@ test('Undo keeps the note', async ({ page }) => {
   await expect(page.getByText(`keep ${run}`)).toBeVisible()
 })
 
+test.describe('on a touch-only phone', () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } })
+
+  test('screen readers can still reach Delete', async ({ page }) => {
+    await signIn(page)
+    await page.goto('/2001/4')
+    expect(await page.evaluate(() => matchMedia('(hover: none)').matches)).toBe(true)
+
+    const input = page.getByRole('textbox', { name: 'New note' })
+    await input.fill(`touch ${run}`)
+    await input.press('Enter')
+    await expect(page.getByText(`touch ${run}`)).toBeVisible()
+
+    // getByRole skips display:none elements, so this is what VoiceOver sees.
+    const deleteButton = page.getByRole('button', { name: `Delete "touch ${run}"` })
+    await expect(deleteButton).toHaveCount(1)
+    await deleteButton.focus()
+    await page.keyboard.press('Enter')
+    await expect(page.getByRole('status')).toContainText('Deleted')
+  })
+})
+
 test('moves between months with the arrows and the back button', async ({ page }) => {
   await signIn(page)
   await page.goto('/2026/1')
