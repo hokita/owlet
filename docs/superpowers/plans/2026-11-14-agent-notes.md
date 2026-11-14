@@ -1,5 +1,7 @@
 # owlet Agent Notes Implementation Plan
 
+> Task 4 (CLI) was reverted later; see 2026-11-14-remove-cli.md.
+
 > **For agentic workers:** Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Let terminal agents add notes through a CLI and an API token limited to the add-note route.

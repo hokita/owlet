@@ -17,7 +17,6 @@ Personal monthly review app — successor to hokita/owl.
 owlet/
 ├── frontend/   # React app
 ├── backend/    # Express API
-├── cli/        # `owlet` CLI for agents to add notes
 └── e2e/        # Playwright end-to-end tests
 ```
 
@@ -54,8 +53,6 @@ Locally, sign-in goes through the Auth emulator's fake identity picker, so use t
 ```sh
 (cd backend && npm test)
 (cd frontend && npm test)
-(cd cli && npm test)
-(cd cli && npm install && npm run build)  # e2e runs the built CLI
 (cd e2e && npm install && npx playwright install --with-deps chromium && npm test)
 (cd e2e && npm run test:servers-stopped)  # after a run that started its own servers: fails if any were left running
 ```
@@ -68,25 +65,26 @@ Pushing to `main` triggers GitHub Actions, which deploys the backend, frontend, 
 - Backend: https://owlet-backend-185845390027.asia-northeast1.run.app
 - GCP project: `owlet-c659da`, region `asia-northeast1`
 
-## Agent notes (CLI)
+## Agent notes (API)
 
-LLM agents running in a terminal (Muse, Claude Code, …) can add notes with the `owlet` CLI. It authenticates with an API token that only works for adding a note — listing and deleting still need the signed-in app. Token requests are limited to 30 an hour, and their notes show an "agent" badge in the app.
+Agents (e.g. Muse via a custom connector) add notes by calling the API with the API token. The token only works for adding a note — listing and deleting still need the signed-in app. Token requests are limited to 30 an hour, and their notes show an "agent" badge in the app.
 
-```sh
-owlet add <event|learn|next> "text" [--month YYYY-MM]   # month defaults to now in Asia/Tokyo
-owlet add learn "Firestore batches commit atomically"
-owlet add next "Write the June review" --month 2027-06
+**Request**
+
+```
+POST https://owlet-backend-185845390027.asia-northeast1.run.app/api/reviews/{year}/{month}/notes
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{"type": "event" | "learn" | "next", "text": "<one line, ≤ 500 chars>"}
 ```
 
-The CLI reads the token from `OWLET_TOKEN`, otherwise from the macOS Keychain (`security find-generic-password -s owlet -w`). `OWLET_API_URL` overrides the backend URL (default: production).
-
-**Install**
+**Responses:** `201` with the saved note (`"source": "api"`); `400 {"error": "..."}` for invalid input; `401` for a missing or wrong token; `429` with `Retry-After` (seconds) when rate limited.
 
 ```sh
-cd cli
-npm install
-npm run build
-npm link          # puts `owlet` on your PATH; `npm unlink -g owlet-cli` removes it
+curl -sS -X POST "https://owlet-backend-185845390027.asia-northeast1.run.app/api/reviews/2026/11/notes" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"type": "learn", "text": "Firestore batches commit atomically"}'
 ```
 
 **One-time setup** (owner, once; nothing here is automated)
@@ -108,15 +106,17 @@ gcloud secrets add-iam-policy-binding owlet-api-token --project owlet-c659da \
 gh variable set OWLET_API_TOKEN_SECRET --repo hokita/owlet --body owlet-api-token
 gh workflow run backend.yml --repo hokita/owlet --ref main
 
-# 5. Keep a copy in the macOS Keychain for the CLI, then drop it from the shell
-security add-generic-password -s owlet -a "$USER" -w "$TOKEN"
-unset TOKEN
+# 5. Check it works (after the redeploy finishes): expect HTTP 201
+curl -sS -o /dev/null -w "%{http_code}\n" -X POST \
+  "https://owlet-backend-185845390027.asia-northeast1.run.app/api/reviews/$(TZ=Asia/Tokyo date +%Y/%-m)/notes" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"type": "event", "text": "owlet agent token set up"}'
 
-# 6. Check it works
-owlet add event "owlet CLI set up"
+# 6. Paste the token into the Muse connector's Bearer token field, then drop it from the shell
+unset TOKEN
 ```
 
-Until step 4, deploys run without the token and token auth stays off. To rotate, add a new secret version (`gcloud secrets versions add owlet-api-token --data-file=-`), redeploy, and update the Keychain item (`security add-generic-password -U -s owlet -a "$USER" -w "$NEW_TOKEN"`).
+Until step 4, deploys run without the token and token auth stays off. To rotate, add a new secret version (`gcloud secrets versions add owlet-api-token --data-file=-`), redeploy, and update the token in the Muse connector.
 
 ## Environment variables (backend)
 
