@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { beforeEach, describe, it, expect, vi } from 'vitest'
 import Composer from './Composer'
 
@@ -30,6 +30,19 @@ describe('Composer', () => {
     const input = screen.getByRole('textbox', { name: 'New note' })
     await waitFor(() => expect(input).toHaveValue(''))
     expect(input).toHaveFocus()
+  })
+
+  it('keeps text typed while the previous note was sending', async () => {
+    let finishAdd: () => void = () => {}
+    const onAdd = vi.fn(() => new Promise<void>((resolve) => (finishAdd = resolve)))
+    render(<Composer onAdd={onAdd} />)
+    type('Trip')
+    fireEvent.click(screen.getByRole('button', { name: 'Add note' }))
+    type('Next thought')
+
+    await act(async () => finishAdd())
+
+    expect(screen.getByRole('textbox', { name: 'New note' })).toHaveValue('Next thought')
   })
 
   it('submits on Enter', () => {

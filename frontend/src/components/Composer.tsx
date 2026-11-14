@@ -39,12 +39,15 @@ export default function Composer({ onAdd }: ComposerProps) {
 
   async function handleSubmit(e?: FormEvent) {
     e?.preventDefault()
-    const trimmed = text.trim()
+    const draft = text
+    const trimmed = draft.trim()
     if (!trimmed || sending) return
     setSending(true)
     try {
       await onAdd({ type, text: trimmed })
-      setText('')
+      // Only clear what was sent: the input stays editable while sending, and
+      // anything typed in the meantime is the next note.
+      setText((current) => (current === draft ? '' : current))
       saveLastType(type)
     } catch {
       // The page shows the error; keep the text so it can be resent.
