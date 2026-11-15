@@ -1,27 +1,10 @@
 import { Router } from 'express'
 import type { Request, RequestHandler, Response } from 'express'
-import { NOTE_TYPES, addNote, deleteNote, listNotes } from '../services/reviews'
-import type { NoteType } from '../services/reviews'
+import { addNote, deleteNote, listNotes } from '../services/reviews'
+import { parseNoteInput, parseYearMonth } from '../services/noteInput'
 
-const MAX_TEXT_LENGTH = 500
-
-function parseMonth(req: Request): { year: number; month: number } | null {
-  const year = Number(req.params.year)
-  const month = Number(req.params.month)
-  if (!Number.isInteger(year) || year < 2000 || year > 2100) return null
-  if (!Number.isInteger(month) || month < 1 || month > 12) return null
-  return { year, month }
-}
-
-function isNoteType(value: unknown): value is NoteType {
-  return (NOTE_TYPES as readonly unknown[]).includes(value)
-}
-
-function parseText(value: unknown): string | null {
-  if (typeof value !== 'string') return null
-  const text = value.trim()
-  if (!text || text.length > MAX_TEXT_LENGTH || /[\r\n]/.test(text)) return null
-  return text
+function parseMonth(req: Request) {
+  return parseYearMonth(req.params.year, req.params.month)
 }
 
 function internalError(res: Response, message: string, err: unknown) {
@@ -60,19 +43,14 @@ export function createReviewsRouter({
       res.status(400).json({ error: 'Invalid month' })
       return
     }
-    const { type } = req.body ?? {}
-    if (!isNoteType(type)) {
-      res.status(400).json({ error: 'Invalid type' })
-      return
-    }
-    const text = parseText(req.body?.text)
-    if (text === null) {
-      res.status(400).json({ error: 'Invalid text' })
+    const input = parseNoteInput(req.body ?? {})
+    if (!input.ok) {
+      res.status(400).json({ error: input.error })
       return
     }
     try {
       const source = res.locals.authSource === 'api' ? 'api' : 'app'
-      const note = await addNote(ym.year, ym.month, { type, text, source })
+      const note = await addNote(ym.year, ym.month, { type: input.type, text: input.text, source })
       res.status(201).json(note)
     } catch (err) {
       internalError(res, 'Failed to add note', err)
