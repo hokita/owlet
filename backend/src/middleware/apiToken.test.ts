@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import express from 'express'
 import type { RequestHandler } from 'express'
 import request from 'supertest'
-import { apiTokenMatcher, userOrApiTokenAuth } from './apiToken'
+import { apiTokenAuth, apiTokenMatcher, userOrApiTokenAuth } from './apiToken'
 import { createRateLimiter } from './rateLimit'
 
 const TOKEN = 'a'.repeat(64)
@@ -81,5 +81,46 @@ describe('userOrApiTokenAuth', () => {
     expect(res.status).toBe(429)
     expect(res.body).toEqual({ error: 'Too many requests' })
     expect(Number(res.headers['retry-after'])).toBeGreaterThan(0)
+  })
+})
+
+describe('apiTokenAuth', () => {
+  function appWith(matches = apiTokenMatcher(TOKEN)) {
+    return express()
+      .use(apiTokenAuth({ matches }))
+      .post('/', (_req, res) => res.json({ authSource: res.locals.authSource }))
+  }
+
+  it('accepts the API token and marks the request as api', async () => {
+    const res = await request(appWith()).post('/').set('Authorization', `Bearer ${TOKEN}`)
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ authSource: 'api' })
+  })
+
+  it('rejects a missing Authorization header with 401', async () => {
+    const res = await request(appWith()).post('/')
+    expect(res.status).toBe(401)
+    expect(res.body).toEqual({ error: 'Invalid token' })
+  })
+
+  it('rejects any other bearer value with 401', async () => {
+    const res = await request(appWith()).post('/').set('Authorization', 'Bearer firebase-id-token')
+    expect(res.status).toBe(401)
+    expect(res.body).toEqual({ error: 'Invalid token' })
+  })
+
+  it('rejects everything when no token is configured', async () => {
+    const res = await request(appWith(apiTokenMatcher(undefined)))
+      .post('/')
+      .set('Authorization', `Bearer ${TOKEN}`)
+    expect(res.status).toBe(401)
+  })
+
+  it('does not rate limit', async () => {
+    const app = appWith()
+    for (let i = 0; i < 40; i++) {
+      const res = await request(app).post('/').set('Authorization', `Bearer ${TOKEN}`)
+      expect(res.status).toBe(200)
+    }
   })
 })

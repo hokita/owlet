@@ -53,3 +53,17 @@ export function userOrApiTokenAuth({
     next()
   }
 }
+
+// For /mcp: the API token only, never a Firebase ID token. Not rate limited
+// here; the MCP tools take from the limiter per tool call.
+export function apiTokenAuth({ matches }: { matches: ((token: string) => boolean) | null }) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const token = req.headers.authorization?.split('Bearer ')[1]
+    if (!matches || !token || !matches(token)) {
+      res.status(401).json({ error: 'Invalid token' })
+      return
+    }
+    res.locals.authSource = 'api'
+    next()
+  }
+}
