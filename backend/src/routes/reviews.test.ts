@@ -16,14 +16,14 @@ import { createReviewsRouter } from './reviews'
 const pass: RequestHandler = (_req, _res, next) => next()
 const app = express()
   .use(express.json())
-  .use('/api/reviews', createReviewsRouter({ userAuth: pass, noteAuth: pass }))
+  .use('/api/reviews', createReviewsRouter({ userAuth: pass }))
 
 const note = { id: 'n1', type: 'event', text: 'Trip', createdAt: '2026-11-14T00:00:00.000Z' }
 
 describe('reviews routes', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('guards GET and DELETE with userAuth and POST with noteAuth', async () => {
+  it('guards every route with userAuth', async () => {
     const deny =
       (name: string): RequestHandler =>
       (_req, res) => {
@@ -31,10 +31,7 @@ describe('reviews routes', () => {
       }
     const guarded = express()
       .use(express.json())
-      .use(
-        '/api/reviews',
-        createReviewsRouter({ userAuth: deny('userAuth'), noteAuth: deny('noteAuth') })
-      )
+      .use('/api/reviews', createReviewsRouter({ userAuth: deny('userAuth') }))
     expect((await request(guarded).get('/api/reviews/2026/11')).body).toEqual({
       error: 'userAuth',
     })
@@ -42,7 +39,7 @@ describe('reviews routes', () => {
       error: 'userAuth',
     })
     expect((await request(guarded).post('/api/reviews/2026/11/notes')).body).toEqual({
-      error: 'noteAuth',
+      error: 'userAuth',
     })
   })
 
@@ -88,22 +85,6 @@ describe('reviews routes', () => {
       expect(res.status).toBe(201)
       expect(res.body).toEqual(note)
       expect(addNote).toHaveBeenCalledWith(2026, 11, { type: 'event', text: 'Trip', source: 'app' })
-    })
-
-    it('saves notes from API token requests with source api', async () => {
-      vi.mocked(addNote).mockResolvedValue(note as never)
-      const asApi: RequestHandler = (_req, res, next) => {
-        res.locals.authSource = 'api'
-        next()
-      }
-      const apiApp = express()
-        .use(express.json())
-        .use('/api/reviews', createReviewsRouter({ userAuth: pass, noteAuth: asApi }))
-      const res = await request(apiApp)
-        .post('/api/reviews/2026/11/notes')
-        .send({ type: 'next', text: 'Read' })
-      expect(res.status).toBe(201)
-      expect(addNote).toHaveBeenCalledWith(2026, 11, { type: 'next', text: 'Read', source: 'api' })
     })
 
     it.each([

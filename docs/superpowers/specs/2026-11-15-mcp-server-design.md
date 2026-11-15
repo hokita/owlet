@@ -58,6 +58,8 @@ If Muse's connector cannot send a custom `Authorization` header (for example it 
 
 Once MCP works from Muse, remove token auth from the REST add-note route in a follow-up PR.
 
+Done 2026-11-15: REST add-note accepts only the sign-in (plan `2026-11-15-remove-rest-token.md`).
+
 ## Approaches considered
 
 1. **MCP inside the existing backend** — picked. Reuses the token check, note code and deploy.

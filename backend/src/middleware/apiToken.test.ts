@@ -1,9 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import express from 'express'
-import type { RequestHandler } from 'express'
 import request from 'supertest'
-import { apiTokenAuth, apiTokenMatcher, userOrApiTokenAuth } from './apiToken'
-import { createRateLimiter } from './rateLimit'
+import { apiTokenAuth, apiTokenMatcher } from './apiToken'
 
 const TOKEN = 'a'.repeat(64)
 
@@ -30,71 +28,17 @@ describe('apiTokenMatcher', () => {
   })
 })
 
-describe('userOrApiTokenAuth', () => {
-  const userAuth = vi.fn<Parameters<RequestHandler>, void>((_req, res) => {
-    res.status(401).json({ error: 'Invalid token' })
-  })
-
-  function appWith(limit = 30) {
-    const limiter = createRateLimiter({ limit, windowMs: 3_600_000 })
-    return express()
-      .use(userOrApiTokenAuth({ matches: apiTokenMatcher(TOKEN), limiter, userAuth }))
-      .post('/', (_req, res) => res.json({ authSource: res.locals.authSource }))
-  }
-
-  it('accepts the API token and marks the request as api', async () => {
-    const res = await request(appWith()).post('/').set('Authorization', `Bearer ${TOKEN}`)
-    expect(res.status).toBe(200)
-    expect(res.body).toEqual({ authSource: 'api' })
-    expect(userAuth).not.toHaveBeenCalled()
-  })
-
-  it('hands any other bearer value to user auth', async () => {
-    userAuth.mockClear()
-    const res = await request(appWith()).post('/').set('Authorization', 'Bearer firebase-id-token')
-    expect(res.status).toBe(401)
-    expect(userAuth).toHaveBeenCalledTimes(1)
-  })
-
-  it('hands everything to user auth when no token is configured', async () => {
-    userAuth.mockClear()
-    const app = express()
-      .use(
-        userOrApiTokenAuth({
-          matches: apiTokenMatcher(undefined),
-          limiter: createRateLimiter({ limit: 30, windowMs: 1000 }),
-          userAuth,
-        })
-      )
-      .post('/', (_req, res) => res.json({}))
-    const res = await request(app).post('/').set('Authorization', `Bearer ${TOKEN}`)
-    expect(res.status).toBe(401)
-    expect(userAuth).toHaveBeenCalledTimes(1)
-  })
-
-  it('rate limits API token requests with 429 and Retry-After', async () => {
-    const app = appWith(2)
-    const send = () => request(app).post('/').set('Authorization', `Bearer ${TOKEN}`)
-    expect((await send()).status).toBe(200)
-    expect((await send()).status).toBe(200)
-    const res = await send()
-    expect(res.status).toBe(429)
-    expect(res.body).toEqual({ error: 'Too many requests' })
-    expect(Number(res.headers['retry-after'])).toBeGreaterThan(0)
-  })
-})
-
 describe('apiTokenAuth', () => {
   function appWith(matches = apiTokenMatcher(TOKEN)) {
     return express()
       .use(apiTokenAuth({ matches }))
-      .post('/', (_req, res) => res.json({ authSource: res.locals.authSource }))
+      .post('/', (_req, res) => res.json({ ok: true }))
   }
 
-  it('accepts the API token and marks the request as api', async () => {
+  it('accepts the API token', async () => {
     const res = await request(appWith()).post('/').set('Authorization', `Bearer ${TOKEN}`)
     expect(res.status).toBe(200)
-    expect(res.body).toEqual({ authSource: 'api' })
+    expect(res.body).toEqual({ ok: true })
   })
 
   it('rejects a missing Authorization header with 401', async () => {

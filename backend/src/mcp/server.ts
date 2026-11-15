@@ -26,7 +26,7 @@ function toolError(message: string): CallToolResult {
   return { ...text(message), isError: true }
 }
 
-// Each tool call takes from the limiter shared with the REST token route;
+// Each tool call takes from the API token limiter;
 // protocol requests (initialize, tools/list) never reach a tool and aren't counted.
 function limited<A>(
   limiter: RateLimiter,
