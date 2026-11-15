@@ -67,7 +67,7 @@ Pushing to `main` triggers GitHub Actions, which deploys the backend, frontend, 
 
 ## Agent notes (API)
 
-Agents (e.g. Muse via a custom connector) add notes by calling the API with the API token. The token only works for adding a note — listing and deleting still need the signed-in app. Token requests are limited to 30 an hour, and their notes show an "agent" badge in the app.
+Agents (e.g. Muse via a custom connector) add notes by calling the API with the API token. On the REST API the token only works for adding a note — listing and deleting there still need the signed-in app; the [MCP server](#mcp-muse) can list, add and delete with the token. Token requests are limited to 30 an hour, and their notes show an "agent" badge in the app.
 
 **Request**
 
@@ -117,6 +117,27 @@ unset TOKEN
 ```
 
 Until step 4, deploys run without the token and token auth stays off. To rotate, add a new secret version (`gcloud secrets versions add owlet-api-token --data-file=-`), redeploy, and update the token in the Muse connector.
+
+## MCP (Muse)
+
+The backend serves an MCP server (streamable HTTP, stateless) at:
+
+```
+https://owlet-backend-185845390027.asia-northeast1.run.app/mcp
+Authorization: Bearer <token>
+```
+
+It uses the same API token as above and accepts nothing else (no Firebase sign-in); a missing or wrong token gets `401`.
+
+| Tool          | Arguments                                                                              | Notes                                              |
+| ------------- | -------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `list_notes`  | `year`, `month`                                                                        | Read-only                                          |
+| `add_note`    | `year`, `month`, `type` (`event` \| `learn` \| `next`), `text` (one line, ≤ 500 chars) | Same validation as the app; saved as an agent note |
+| `delete_note` | `year`, `month`, `id`                                                                  | Marked destructive, so the client asks first       |
+
+**Rate limit:** REST token requests and MCP tool calls share the 30-an-hour limit. Protocol requests (`initialize`, `tools/list`) aren't counted. Over the limit, a tool call returns a tool error `Rate limit reached: try again in <N> seconds` (HTTP status stays 200).
+
+**Muse setup** (after a deploy): add a custom connector with the URL above and the token as a Bearer header, then try each tool: list this month's notes, add one (it shows in the app with the "agent" badge), delete it (Muse should ask first). If the connector can't send a custom `Authorization` header, it can't connect — OAuth isn't supported.
 
 ## Environment variables (backend)
 
