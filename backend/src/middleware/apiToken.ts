@@ -1,6 +1,5 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
-import type { Request, Response, NextFunction, RequestHandler } from 'express'
-import type { RateLimiter } from './rateLimit'
+import type { Request, Response, NextFunction } from 'express'
 
 // 32 random bytes in base64url; `openssl rand -hex 32` (64 chars) is longer.
 const MIN_TOKEN_LENGTH = 43
@@ -26,34 +25,6 @@ export function apiTokenMatcher(
   return (token) => timingSafeEqual(digest(token), expected)
 }
 
-// For the add-note route only: accepts the API token (rate limited) or falls
-// back to the normal Firebase user auth. Sets res.locals.authSource = 'api'
-// for token requests.
-export function userOrApiTokenAuth({
-  matches,
-  limiter,
-  userAuth,
-}: {
-  matches: ((token: string) => boolean) | null
-  limiter: RateLimiter
-  userAuth: RequestHandler
-}) {
-  return (req: Request, res: Response, next: NextFunction) => {
-    const token = req.headers.authorization?.split('Bearer ')[1]
-    if (!matches || !token || !matches(token)) {
-      return userAuth(req, res, next)
-    }
-    const allowed = limiter.take()
-    if (!allowed.ok) {
-      res.setHeader('Retry-After', String(allowed.retryAfterSeconds))
-      res.status(429).json({ error: 'Too many requests' })
-      return
-    }
-    res.locals.authSource = 'api'
-    next()
-  }
-}
-
 // For /mcp: the API token only, never a Firebase ID token. Not rate limited
 // here; the MCP tools take from the limiter per tool call.
 export function apiTokenAuth({ matches }: { matches: ((token: string) => boolean) | null }) {
@@ -63,7 +34,6 @@ export function apiTokenAuth({ matches }: { matches: ((token: string) => boolean
       res.status(401).json({ error: 'Invalid token' })
       return
     }
-    res.locals.authSource = 'api'
     next()
   }
 }

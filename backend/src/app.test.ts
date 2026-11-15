@@ -43,17 +43,13 @@ describe('app', () => {
       vi.stubEnv('OWLET_API_TOKEN', TOKEN)
     })
 
-    it('adds a note with the API token, marked as api', async () => {
+    it('rejects the API token for adding notes over REST', async () => {
       const res = await request(createApp())
         .post('/api/reviews/2026/11/notes')
         .set('Authorization', bearer)
         .send({ type: 'learn', text: 'From an agent' })
-      expect(res.status).toBe(201)
-      expect(addNote).toHaveBeenCalledWith(2026, 11, {
-        type: 'learn',
-        text: 'From an agent',
-        source: 'api',
-      })
+      expect(res.status).toBe(401)
+      expect(addNote).not.toHaveBeenCalled()
     })
 
     it('rejects the API token for listing notes', async () => {
@@ -71,27 +67,6 @@ describe('app', () => {
       expect(res.status).toBe(401)
       expect(deleteNote).not.toHaveBeenCalled()
     })
-
-    it('rate limits API token requests after 30 an hour', async () => {
-      const app = createApp()
-      const send = () =>
-        request(app)
-          .post('/api/reviews/2026/11/notes')
-          .set('Authorization', bearer)
-          .send({ type: 'event', text: 'x' })
-      for (let i = 0; i < 30; i++) expect((await send()).status).toBe(201)
-      expect((await send()).status).toBe(429)
-    })
-  })
-
-  it('rejects the API token everywhere when OWLET_API_TOKEN is unset', async () => {
-    vi.stubEnv('OWLET_API_TOKEN', '')
-    const res = await request(createApp())
-      .post('/api/reviews/2026/11/notes')
-      .set('Authorization', bearer)
-      .send({ type: 'event', text: 'x' })
-    expect(res.status).toBe(401)
-    expect(addNote).not.toHaveBeenCalled()
   })
 
   describe('/mcp', () => {
@@ -195,28 +170,6 @@ describe('app', () => {
           expect(limited.isError).toBe(true)
           expect((limited.content as { text: string }[])[0].text).toMatch(RATE_LIMITED)
         })
-      })
-
-      it('shares the token rate limit between REST and MCP tool calls', async () => {
-        const app = createApp()
-        const rest = () =>
-          request(app)
-            .post('/api/reviews/2026/11/notes')
-            .set('Authorization', bearer)
-            .send({ type: 'event', text: 'x' })
-        for (let i = 0; i < 20; i++) expect((await rest()).status).toBe(201)
-        await withClient(app, async (client) => {
-          for (let i = 0; i < 10; i++)
-            expect((await client.callTool(addNoteCall)).isError).toBeFalsy()
-          const limited = await client.callTool(addNoteCall)
-          expect(limited.isError).toBe(true)
-          expect((limited.content as { text: string }[])[0].text).toMatch(RATE_LIMITED)
-          expect((await client.listTools()).tools).toHaveLength(3)
-        })
-        const res = await rest()
-        expect(res.status).toBe(429)
-        expect(Number(res.headers['retry-after'])).toBeGreaterThan(0)
-        expect((await postMcp(app, bearer)).status).toBe(200)
       })
     })
   })

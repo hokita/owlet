@@ -1,13 +1,12 @@
 import express from 'express'
 import cors from 'cors'
 import { authMiddleware } from './middleware/auth'
-import { apiTokenAuth, apiTokenMatcher, userOrApiTokenAuth } from './middleware/apiToken'
+import { apiTokenAuth, apiTokenMatcher } from './middleware/apiToken'
 import { createRateLimiter } from './middleware/rateLimit'
 import { createReviewsRouter } from './routes/reviews'
 import { createMcpRequestHandler } from './mcp/server'
 
-// Agents using the API token may make this many REST add-note requests and MCP
-// tool calls per hour, together (per instance).
+// Agents using the API token may make this many MCP tool calls per hour (per instance).
 const API_TOKEN_LIMIT_PER_HOUR = 30
 
 export function createApp() {
@@ -23,13 +22,7 @@ export function createApp() {
     limit: API_TOKEN_LIMIT_PER_HOUR,
     windowMs: 60 * 60 * 1000,
   })
-  app.use(
-    '/api/reviews',
-    createReviewsRouter({
-      userAuth: authMiddleware,
-      noteAuth: userOrApiTokenAuth({ matches, limiter: apiTokenLimiter, userAuth: authMiddleware }),
-    })
-  )
+  app.use('/api/reviews', createReviewsRouter({ userAuth: authMiddleware }))
   // All methods, so GET/DELETE reach the SDK, which answers 405 when stateless.
   app.all('/mcp', apiTokenAuth({ matches }), createMcpRequestHandler({ limiter: apiTokenLimiter }))
   return app

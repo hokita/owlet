@@ -12,15 +12,8 @@ function internalError(res: Response, message: string, err: unknown) {
   res.status(500).json({ error: 'Internal error' })
 }
 
-// userAuth guards everything; noteAuth guards adding a note, the one route an
-// agent's API token may use (it sets res.locals.authSource = 'api').
-export function createReviewsRouter({
-  userAuth,
-  noteAuth,
-}: {
-  userAuth: RequestHandler
-  noteAuth: RequestHandler
-}): Router {
+// userAuth (the Firebase sign-in) guards every route.
+export function createReviewsRouter({ userAuth }: { userAuth: RequestHandler }): Router {
   const router = Router()
 
   router.get('/:year/:month', userAuth, async (req, res) => {
@@ -37,7 +30,7 @@ export function createReviewsRouter({
     }
   })
 
-  router.post('/:year/:month/notes', noteAuth, async (req, res) => {
+  router.post('/:year/:month/notes', userAuth, async (req, res) => {
     const ym = parseMonth(req)
     if (!ym) {
       res.status(400).json({ error: 'Invalid month' })
@@ -49,8 +42,11 @@ export function createReviewsRouter({
       return
     }
     try {
-      const source = res.locals.authSource === 'api' ? 'api' : 'app'
-      const note = await addNote(ym.year, ym.month, { type: input.type, text: input.text, source })
+      const note = await addNote(ym.year, ym.month, {
+        type: input.type,
+        text: input.text,
+        source: 'app',
+      })
       res.status(201).json(note)
     } catch (err) {
       internalError(res, 'Failed to add note', err)
