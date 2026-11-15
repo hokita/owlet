@@ -182,6 +182,23 @@ describe('owlet MCP server', () => {
     expect(listNotes).toHaveBeenCalledTimes(3)
   })
 
+  it('logs requests the SDK rejects, without the request headers', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        Authorization: 'Bearer secret-value',
+      },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+    })
+    expect(res.status).toBe(406)
+    expect(errSpy).toHaveBeenCalledWith('MCP request failed:', expect.any(String))
+    expect(JSON.stringify(errSpy.mock.calls)).not.toContain('secret-value')
+    errSpy.mockRestore()
+  })
+
   it('answers the 2026-07-28 revision too', async () => {
     const client = await connect({ versionNegotiation: { mode: 'auto' } })
     const { tools } = await client.listTools()

@@ -18,7 +18,9 @@ Let Muse (Meta's iPhone AI assistant, which runs in Meta's cloud and can add cus
 
 **Route.** `/mcp` on the existing Express app (`backend/src/app.ts`, Cloud Run service `owlet-backend`), served by the official MCP TypeScript SDK's streamable HTTP support in **stateless** mode (a fresh server per request, no sessions). Exact SDK version pinned.
 
-**Auth.** `Authorization: Bearer <owlet token>`, checked with the existing `apiTokenMatcher` and the same 30-per-hour rate limit as the token's REST use. Missing or wrong token → `401`; over the limit → `429` with `Retry-After`. `/mcp` accepts only the token, never a Firebase ID token. With `OWLET_API_TOKEN` unset, `/mcp` rejects everything.
+**Auth.** `Authorization: Bearer <owlet token>`, checked with the existing `apiTokenMatcher`. Missing or wrong token → `401`. `/mcp` accepts only the token, never a Firebase ID token. With `OWLET_API_TOKEN` unset, `/mcp` rejects everything.
+
+**Rate limit** *(owner decision, 2026-11-15)*. Only tool calls count, not `initialize`, `tools/list` or other protocol requests. They share one 30-per-hour limiter with the REST token route. Over the limit, the tool call returns a tool error `Rate limit reached: try again in <N> seconds` (HTTP 200); REST keeps its `429` with `Retry-After`.
 
 **Tools.**
 
@@ -38,7 +40,7 @@ Tools reuse the existing note code: the validation now inside `backend/src/route
 ## Testing (red/green TDD)
 
 - Each tool exercised through a real MCP SDK client against the app running in-process.
-- Missing or wrong token → `401`; Firebase-style bearer → `401`; rate limit applies to `/mcp`.
+- Missing or wrong token → `401`; Firebase-style bearer → `401`; tool calls are rate limited, protocol requests are not.
 - Validation errors come back as clear tool errors.
 - Existing backend, frontend and e2e suites stay green and unchanged.
 
