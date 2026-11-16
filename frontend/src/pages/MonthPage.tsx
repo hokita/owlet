@@ -11,9 +11,13 @@ import Composer from '../components/Composer'
 import NoteRow from '../components/NoteRow'
 import { useKeyboardInset } from '../useKeyboardInset'
 import { usePullToRefresh } from '../usePullToRefresh'
+import { useRefreshOnReturn } from '../useRefreshOnReturn'
 
 // How long a deleted note can be brought back before the delete is sent.
 const UNDO_MS = 5000
+
+// Coming back to the app refreshes only if the month was last fetched this long ago.
+const AUTO_REFRESH_MIN_MS = 30_000
 
 // Height (px) of the pull indicator while the spinner shows.
 const REFRESHING_HEIGHT = 48
@@ -134,6 +138,13 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
         if (mounted.current) setRefreshing(false)
       })
   }
+
+  // Skips quick hide/show flicker (the interval; `refresh()` itself skips a
+  // return while a refresh is running) and a month that hasn't loaded yet.
+  useRefreshOnReturn(() => {
+    if (!loaded || Date.now() - lastLoadStartedAt.current < AUTO_REFRESH_MIN_MS) return
+    refresh()
+  })
 
   async function handleAdd(input: { type: NoteType; text: string }) {
     try {

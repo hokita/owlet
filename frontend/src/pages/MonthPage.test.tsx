@@ -493,4 +493,133 @@ describe('MonthPage', () => {
       expect(mockApi.getReview).toHaveBeenCalledTimes(1)
     })
   })
+
+  describe('refresh on return', () => {
+    const muse = {
+      id: 'n5',
+      type: 'learn',
+      text: 'Muse note',
+      source: 'api',
+      createdAt: '2026-11-05T00:00:00.000Z',
+    }
+    const t0 = new Date('2026-11-16T09:00:00Z')
+
+    function setVisibility(value: 'visible' | 'hidden') {
+      Object.defineProperty(document, 'visibilityState', { value, configurable: true })
+      document.dispatchEvent(new Event('visibilitychange'))
+    }
+
+    function returnToApp() {
+      act(() => {
+        setVisibility('hidden')
+        setVisibility('visible')
+      })
+    }
+
+    function advance(ms: number) {
+      vi.setSystemTime(new Date(Date.now() + ms))
+    }
+
+    // Further getReview calls are held open until the test settles them.
+    function deferReview() {
+      let resolve: (notes: unknown[]) => Promise<void> = async () => {}
+      mockApi.getReview.mockReturnValue(
+        new Promise((r) => {
+          resolve = (notes) => act(async () => r({ ...november, notes }))
+        })
+      )
+      return { resolve: (notes: unknown[]) => resolve(notes) }
+    }
+
+    function pull(dy: number) {
+      const main = screen.getByRole('main')
+      const at = (y: number) => ({ touches: [{ clientX: 100, clientY: y }] })
+      fireEvent.touchStart(main, at(100))
+      fireEvent.touchMove(main, at(100 + dy))
+      fireEvent.touchEnd(main)
+    }
+
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(t0)
+    })
+
+    afterEach(() => {
+      Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true })
+    })
+
+    it('refreshes when coming back after 30 seconds', async () => {
+      await renderLoaded()
+      mockApi.getReview.mockResolvedValue({ ...november, notes: [trip, firestore, run, muse] })
+      advance(30_000)
+      returnToApp()
+
+      expect(await screen.findByText('Muse note')).toBeInTheDocument()
+      expect(mockApi.getReview).toHaveBeenCalledTimes(2)
+    })
+
+    it('skips a return within 30 seconds of the load', async () => {
+      await renderLoaded()
+      advance(29_999)
+      returnToApp()
+      expect(mockApi.getReview).toHaveBeenCalledTimes(1)
+    })
+
+    it('hidden and shown quickly several times refreshes once', async () => {
+      await renderLoaded()
+      advance(31_000)
+      returnToApp()
+      returnToApp()
+      returnToApp()
+      await waitFor(() => expect(screen.queryByText('Refreshing…')).not.toBeInTheDocument())
+      expect(mockApi.getReview).toHaveBeenCalledTimes(2)
+    })
+
+    it('skips a return while a refresh is running', async () => {
+      await renderLoaded()
+      const review = deferReview()
+      advance(31_000)
+      pull(200)
+      expect(mockApi.getReview).toHaveBeenCalledTimes(2)
+
+      advance(31_000)
+      returnToApp()
+      expect(mockApi.getReview).toHaveBeenCalledTimes(2)
+      await review.resolve([trip, firestore, run])
+    })
+
+    it('a pull right after an auto-refresh still works', async () => {
+      await renderLoaded()
+      advance(31_000)
+      returnToApp()
+      await waitFor(() => expect(screen.queryByText('Refreshing…')).not.toBeInTheDocument())
+      expect(mockApi.getReview).toHaveBeenCalledTimes(2)
+
+      pull(200)
+      expect(mockApi.getReview).toHaveBeenCalledTimes(3)
+      await waitFor(() => expect(screen.queryByText('Refreshing…')).not.toBeInTheDocument())
+    })
+
+    it('does nothing before the month has loaded', () => {
+      mockApi.getReview.mockReturnValue(new Promise(() => {}))
+      render(<MonthPage month={november} onNavigate={vi.fn()} />)
+      advance(31_000)
+      returnToApp()
+      expect(mockApi.getReview).toHaveBeenCalledTimes(1)
+    })
+
+    it('a failed auto-refresh keeps the notes and shows the message', async () => {
+      await renderLoaded()
+      mockApi.getReview.mockRejectedValue(new Error('API error: 500'))
+      advance(31_000)
+      returnToApp()
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        "Couldn't refresh. Pull to try again."
+      )
+      expect(screen.getByText('Trip')).toBeInTheDocument()
+      expect(screen.getByText('Firestore')).toBeInTheDocument()
+      expect(screen.getByText('Run')).toBeInTheDocument()
+    })
+  })
 })
