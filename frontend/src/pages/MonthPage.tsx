@@ -5,14 +5,20 @@ import { auth } from '../firebase'
 import { api } from '../api'
 import { formatMonth, shiftMonth } from '../month'
 import type { YearMonth } from '../month'
-import { mergeNotes } from '../notes'
+import { applyRefresh, mergeNotes } from '../notes'
 import type { Note, NoteType } from '../notes'
 import Composer from '../components/Composer'
 import NoteRow from '../components/NoteRow'
 import { useKeyboardInset } from '../useKeyboardInset'
+import { usePullToRefresh } from '../usePullToRefresh'
 
 // How long a deleted note can be brought back before the delete is sent.
 const UNDO_MS = 5000
+
+// Height (px) of the pull indicator while the spinner shows.
+const REFRESHING_HEIGHT = 48
+
+const REFRESH_FAILED = "Couldn't refresh. Pull to try again."
 
 const SECTIONS: { type: NoteType; title: string }[] = [
   { type: 'event', title: 'Events' },
@@ -40,6 +46,19 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
   const [pendingNote, setPendingNote] = useState<Note | null>(null)
   const pending = useRef<{ note: Note; timer: ReturnType<typeof setTimeout> } | null>(null)
   const keyboardInset = useKeyboardInset()
+  // A refresh refetches the month without touching `loaded` or `loadError`,
+  // and never clears the notes on screen, even when it fails.
+  const [refreshing, setRefreshing] = useState(false)
+  const [refreshError, setRefreshError] = useState<string | null>(null)
+  const inFlight = useRef(false)
+  const lastLoadStartedAt = useRef(0)
+  // Notes added or deleted here while a refresh is in flight, so its result
+  // doesn't undo them. Null when no refresh is running.
+  const localChanges = useRef<{ added: Set<string>; deleted: Set<string> } | null>(null)
+  // A refresh still running when the month changes is ignored.
+  const mounted = useRef(true)
+  const mainRef = useRef<HTMLElement>(null)
+  const pull = usePullToRefresh(mainRef, { onRefresh: refresh, enabled: loaded, refreshing })
 
   // Resolves once the delete request has settled (failures are handled here).
   const sendPendingDelete = useCallback((): Promise<void> => {
@@ -49,13 +68,22 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
     pending.current = null
     setPendingNote(null)
     return api.deleteNote(month, current.note.id).catch((e: Error) => {
+      localChanges.current?.deleted.delete(current.note.id)
       setNotes((prev) => mergeNotes(prev, [current.note]))
       setError(`Could not delete: ${e.message}`)
     })
   }, [month])
 
   useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
+
+  useEffect(() => {
     let cancelled = false
+    lastLoadStartedAt.current = Date.now()
     api
       .getReview(month)
       .then((review) => {
@@ -72,9 +100,38 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
     }
   }, [month, loadAttempt, sendPendingDelete])
 
+  function refresh() {
+    if (inFlight.current) return
+    inFlight.current = true
+    lastLoadStartedAt.current = Date.now()
+    // A note waiting for its Undo counts as deleted here, even once it's sent.
+    const local = {
+      added: new Set<string>(),
+      deleted: new Set(pending.current ? [pending.current.note.id] : []),
+    }
+    localChanges.current = local
+    setRefreshing(true)
+    api
+      .getReview(month)
+      .then((review) => {
+        if (!mounted.current) return
+        setNotes((prev) => applyRefresh(prev, review.notes, local))
+        setRefreshError(null)
+      })
+      .catch(() => {
+        if (mounted.current) setRefreshError(REFRESH_FAILED)
+      })
+      .finally(() => {
+        inFlight.current = false
+        localChanges.current = null
+        if (mounted.current) setRefreshing(false)
+      })
+  }
+
   async function handleAdd(input: { type: NoteType; text: string }) {
     try {
       const note = await api.addNote(month, input)
+      localChanges.current?.added.add(note.id)
       setNotes((prev) => mergeNotes(prev, [note]))
       setError(null)
     } catch (e) {
@@ -85,6 +142,7 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
 
   function handleDelete(note: Note) {
     sendPendingDelete()
+    localChanges.current?.deleted.add(note.id)
     setNotes((prev) => prev.filter((n) => n.id !== note.id))
     pending.current = { note, timer: setTimeout(sendPendingDelete, UNDO_MS) }
     setPendingNote(note)
@@ -103,6 +161,7 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
     clearTimeout(current.timer)
     pending.current = null
     setPendingNote(null)
+    localChanges.current?.deleted.delete(current.note.id)
     setNotes((prev) => mergeNotes(prev, [current.note]))
   }
 
@@ -135,7 +194,30 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
         </div>
       </header>
 
-      <main className="mx-auto max-w-2xl px-4 pt-4 pb-44">
+      <main ref={mainRef} className="mx-auto max-w-2xl px-4 pt-4 pb-44">
+        {/* Not role="status": the Undo toast owns that role. */}
+        <div
+          aria-live="polite"
+          style={{ height: pull.state === 'refreshing' ? REFRESHING_HEIGHT : pull.distance }}
+          className={`flex items-center justify-center gap-2 overflow-hidden text-sm text-gray-500 ${
+            pull.state === 'pulling' || pull.state === 'armed'
+              ? ''
+              : 'transition-[height] duration-200'
+          }`}
+        >
+          {pull.state === 'pulling' && 'Pull to refresh'}
+          {pull.state === 'armed' && 'Release to refresh'}
+          {pull.state === 'refreshing' && (
+            <>
+              <span
+                aria-hidden="true"
+                className="size-4 animate-spin rounded-full border-2 border-gray-300 border-t-gray-600"
+              />
+              Refreshing…
+            </>
+          )}
+        </div>
+
         {loadError && (
           <div
             role="alert"
@@ -150,6 +232,12 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
               Retry
             </button>
           </div>
+        )}
+
+        {refreshError && (
+          <p role="alert" className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+            {refreshError}
+          </p>
         )}
 
         {error && (
