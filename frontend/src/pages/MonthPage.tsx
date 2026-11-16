@@ -45,6 +45,8 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
   const [error, setError] = useState<string | null>(null)
   const [pendingNote, setPendingNote] = useState<Note | null>(null)
   const pending = useRef<{ note: Note; timer: ReturnType<typeof setTimeout> } | null>(null)
+  // Ids whose delete has been sent but not answered yet.
+  const sendingDeletes = useRef(new Set<string>())
   const keyboardInset = useKeyboardInset()
   // A refresh refetches the month without touching `loaded` or `loadError`,
   // and never clears the notes on screen, even when it fails.
@@ -67,11 +69,16 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
     clearTimeout(current.timer)
     pending.current = null
     setPendingNote(null)
-    return api.deleteNote(month, current.note.id).catch((e: Error) => {
-      localChanges.current?.deleted.delete(current.note.id)
-      setNotes((prev) => mergeNotes(prev, [current.note]))
-      setError(`Could not delete: ${e.message}`)
-    })
+    const id = current.note.id
+    sendingDeletes.current.add(id)
+    return api
+      .deleteNote(month, id)
+      .catch((e: Error) => {
+        localChanges.current?.deleted.delete(id)
+        setNotes((prev) => mergeNotes(prev, [current.note]))
+        setError(`Could not delete: ${e.message}`)
+      })
+      .finally(() => sendingDeletes.current.delete(id))
   }, [month])
 
   useEffect(() => {
@@ -104,11 +111,11 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
     if (inFlight.current) return
     inFlight.current = true
     lastLoadStartedAt.current = Date.now()
-    // A note waiting for its Undo counts as deleted here, even once it's sent.
-    const local = {
-      added: new Set<string>(),
-      deleted: new Set(pending.current ? [pending.current.note.id] : []),
-    }
+    // A note waiting for its Undo, or whose delete is still being sent, counts
+    // as deleted here: the server may answer before the delete lands.
+    const deleted = new Set(sendingDeletes.current)
+    if (pending.current) deleted.add(pending.current.note.id)
+    const local = { added: new Set<string>(), deleted }
     localChanges.current = local
     setRefreshing(true)
     api

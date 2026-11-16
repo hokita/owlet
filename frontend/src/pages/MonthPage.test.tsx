@@ -407,6 +407,39 @@ describe('MonthPage', () => {
       expect(screen.queryByText('Trip')).not.toBeInTheDocument()
     })
 
+    it('a note whose delete is still being sent when a refresh starts stays gone', async () => {
+      await renderLoaded()
+      let failDelete: () => Promise<void> = async () => {}
+      mockApi.deleteNote.mockReturnValue(
+        new Promise<void>((_, reject) => {
+          failDelete = () => act(async () => reject(new Error('API error: 500')))
+        })
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Delete "Trip"' }))
+      // Deleting another note sends Trip's delete, which stays unanswered.
+      fireEvent.click(screen.getByRole('button', { name: 'Delete "Run"' }))
+      expect(mockApi.deleteNote).toHaveBeenCalledWith(november, 'n1')
+
+      mockApi.getReview.mockResolvedValue({ ...november, notes: [trip, firestore, run] })
+      pull(200)
+      await waitFor(() => expect(screen.queryByText('Refreshing…')).not.toBeInTheDocument())
+      expect(screen.queryByText('Trip')).not.toBeInTheDocument()
+
+      await failDelete()
+      expect(within(section('Events')).getByText('Trip')).toBeInTheDocument()
+    })
+
+    it('Undo during a refresh keeps the note', async () => {
+      await renderLoaded()
+      fireEvent.click(screen.getByRole('button', { name: 'Delete "Trip"' }))
+      const review = deferReview()
+      pull(200)
+      fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+
+      await review.resolve([trip, firestore, run])
+      expect(within(section('Events')).getByText('Trip')).toBeInTheDocument()
+    })
+
     it('a delete that fails during a refresh brings the note back', async () => {
       await renderLoaded()
       mockApi.deleteNote.mockRejectedValue(new Error('API error: 500'))
@@ -439,7 +472,9 @@ describe('MonthPage', () => {
       expect(mockApi.getReview).toHaveBeenCalledTimes(1)
     })
 
-    it('a refresh after the month changes is ignored', async () => {
+    // Smoke test: React 18 doesn't warn on a late setState, so this can't catch a
+    // missing guard; it only checks a late result doesn't throw or log.
+    it('a refresh after the month changes is ignored (smoke test)', async () => {
       const consoleError = vi.spyOn(console, 'error')
       const { unmount } = await renderLoaded()
       const review = deferReview()
