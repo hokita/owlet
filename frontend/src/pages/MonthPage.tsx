@@ -5,6 +5,7 @@ import { auth } from '../firebase'
 import { api } from '../api'
 import { formatMonth, shiftMonth } from '../month'
 import type { YearMonth } from '../month'
+import { mergeNotes } from '../notes'
 import type { Note, NoteType } from '../notes'
 import Composer from '../components/Composer'
 import NoteRow from '../components/NoteRow'
@@ -18,15 +19,6 @@ const SECTIONS: { type: NoteType; title: string }[] = [
   { type: 'learn', title: 'Learns' },
   { type: 'next', title: 'Nexts' },
 ]
-
-// Combines note lists by id. A note added before the month finishes loading
-// can arrive both from the POST and in the GET, in either order, so every
-// update merges instead of appending or replacing.
-function mergeNotes(current: Note[], incoming: Note[]): Note[] {
-  const byId = new Map(current.map((n) => [n.id, n]))
-  for (const note of incoming) byId.set(note.id, note)
-  return [...byId.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-}
 
 interface MonthPageProps {
   month: YearMonth
