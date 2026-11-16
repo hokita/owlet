@@ -1,9 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { signIn } from '../fixtures/auth'
-
-// Matches OWLET_API_TOKEN in backend/.env.e2e (a test value, not a secret).
-const API_TOKEN = `e2e-api-token-${'x'.repeat(50)}`
-const API_URL = 'http://localhost:8090'
+import { addNoteOverMcp, API_TOKEN, API_URL } from '../fixtures/mcp'
 
 const run = Date.now()
 
@@ -11,23 +8,12 @@ test('an agent adds a note over MCP with the API token, shown with the agent bad
   page,
   request,
 }) => {
-  const res = await request.post(`${API_URL}/mcp`, {
-    headers: {
-      Authorization: `Bearer ${API_TOKEN}`,
-      Accept: 'application/json, text/event-stream',
-    },
-    data: {
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'tools/call',
-      params: {
-        name: 'add_note',
-        arguments: { year: 2001, month: 6, type: 'learn', text: `agent ${run}` },
-      },
-    },
+  const body = await addNoteOverMcp(request, {
+    year: 2001,
+    month: 6,
+    type: 'learn',
+    text: `agent ${run}`,
   })
-  expect(res.status()).toBe(200)
-  const body = await res.text()
   expect(body).toContain(`agent ${run}`)
   expect(body).toContain('\\"source\\":\\"api\\"')
   expect(body).not.toContain('"isError":true')
