@@ -41,6 +41,38 @@ function addNote(text: string) {
   fireEvent.click(screen.getByRole('button', { name: 'Add note' }))
 }
 
+const muse = {
+  id: 'n5',
+  type: 'learn',
+  text: 'Muse note',
+  source: 'api',
+  createdAt: '2026-11-05T00:00:00.000Z',
+}
+
+const at = (y: number, x = 100) => ({ touches: [{ clientX: x, clientY: y }] })
+
+function startPull(dy: number) {
+  const main = screen.getByRole('main')
+  fireEvent.touchStart(main, at(100))
+  fireEvent.touchMove(main, at(100 + dy))
+}
+
+function pull(dy: number) {
+  startPull(dy)
+  fireEvent.touchEnd(screen.getByRole('main'))
+}
+
+// Further getReview calls are held open until the test settles them.
+function deferReview() {
+  let resolve: (notes: unknown[]) => Promise<void> = async () => {}
+  mockApi.getReview.mockReturnValue(
+    new Promise((r) => {
+      resolve = (notes) => act(async () => r({ ...november, notes }))
+    })
+  )
+  return { resolve: (notes: unknown[]) => resolve(notes) }
+}
+
 describe('MonthPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -266,38 +298,7 @@ describe('MonthPage', () => {
   })
 
   describe('pull to refresh', () => {
-    const muse = {
-      id: 'n5',
-      type: 'learn',
-      text: 'Muse note',
-      source: 'api',
-      createdAt: '2026-11-05T00:00:00.000Z',
-    }
     const read = { id: 'n4', type: 'next', text: 'Read', createdAt: '2026-11-04T00:00:00.000Z' }
-
-    const at = (y: number, x = 100) => ({ touches: [{ clientX: x, clientY: y }] })
-
-    function startPull(dy: number) {
-      const main = screen.getByRole('main')
-      fireEvent.touchStart(main, at(100))
-      fireEvent.touchMove(main, at(100 + dy))
-    }
-
-    function pull(dy: number) {
-      startPull(dy)
-      fireEvent.touchEnd(screen.getByRole('main'))
-    }
-
-    // Further getReview calls are held open until the test resolves them.
-    function deferReview() {
-      let resolve: (notes: unknown[]) => Promise<void> = async () => {}
-      mockApi.getReview.mockReturnValue(
-        new Promise((r) => {
-          resolve = (notes) => act(async () => r({ ...november, notes }))
-        })
-      )
-      return { resolve: (notes: unknown[]) => resolve(notes) }
-    }
 
     it('shows Pull to refresh, then Release to refresh, while pulling', async () => {
       await renderLoaded()
@@ -495,13 +496,6 @@ describe('MonthPage', () => {
   })
 
   describe('refresh on return', () => {
-    const muse = {
-      id: 'n5',
-      type: 'learn',
-      text: 'Muse note',
-      source: 'api',
-      createdAt: '2026-11-05T00:00:00.000Z',
-    }
     const t0 = new Date('2026-11-16T09:00:00Z')
 
     function setVisibility(value: 'visible' | 'hidden') {
@@ -518,25 +512,6 @@ describe('MonthPage', () => {
 
     function advance(ms: number) {
       vi.setSystemTime(new Date(Date.now() + ms))
-    }
-
-    // Further getReview calls are held open until the test settles them.
-    function deferReview() {
-      let resolve: (notes: unknown[]) => Promise<void> = async () => {}
-      mockApi.getReview.mockReturnValue(
-        new Promise((r) => {
-          resolve = (notes) => act(async () => r({ ...november, notes }))
-        })
-      )
-      return { resolve: (notes: unknown[]) => resolve(notes) }
-    }
-
-    function pull(dy: number) {
-      const main = screen.getByRole('main')
-      const at = (y: number) => ({ touches: [{ clientX: 100, clientY: y }] })
-      fireEvent.touchStart(main, at(100))
-      fireEvent.touchMove(main, at(100 + dy))
-      fireEvent.touchEnd(main)
     }
 
     beforeEach(() => {

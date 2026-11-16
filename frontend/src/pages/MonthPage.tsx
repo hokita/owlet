@@ -64,7 +64,6 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
   // A refresh still running when the month changes is ignored.
   const mounted = useRef(true)
   const mainRef = useRef<HTMLElement>(null)
-  const pull = usePullToRefresh(mainRef, { onRefresh: refresh, enabled: loaded, refreshing })
 
   // Resolves once the delete request has settled (failures are handled here).
   const sendPendingDelete = useCallback((): Promise<void> => {
@@ -145,6 +144,8 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
     if (!loaded || Date.now() - lastLoadStartedAt.current < AUTO_REFRESH_MIN_MS) return
     refresh()
   })
+
+  const pull = usePullToRefresh(mainRef, { onRefresh: refresh, enabled: loaded, refreshing })
 
   async function handleAdd(input: { type: NoteType; text: string }) {
     try {
