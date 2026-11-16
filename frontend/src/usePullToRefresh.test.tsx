@@ -159,7 +159,7 @@ describe('usePullToRefresh', () => {
   it("doesn't start while refreshing", () => {
     const { area, onRefresh } = setup({ refreshing: true })
     fireEvent.touchStart(area, at(100, 100))
-    fireEvent.touchMove(area, at(100, 300))
+    expect(fireEvent.touchMove(area, at(100, 300))).toBe(true)
     expect(state()).toBe('refreshing')
     expect(distance()).toBe('0')
     fireEvent.touchEnd(area)
@@ -169,7 +169,7 @@ describe('usePullToRefresh', () => {
   it("doesn't start while disabled", () => {
     const { area, onRefresh } = setup({ enabled: false })
     fireEvent.touchStart(area, at(100, 100))
-    fireEvent.touchMove(area, at(100, 300))
+    expect(fireEvent.touchMove(area, at(100, 300))).toBe(true)
     expect(state()).toBe('idle')
     fireEvent.touchEnd(area)
     expect(onRefresh).not.toHaveBeenCalled()
@@ -181,6 +181,34 @@ describe('usePullToRefresh', () => {
     fireEvent.mouseMove(area, { clientX: 100, clientY: 300 })
     fireEvent.mouseUp(area, { clientX: 100, clientY: 300 })
     expect(state()).toBe('idle')
+    expect(onRefresh).not.toHaveBeenCalled()
+  })
+
+  it('picks up options that change after mount', () => {
+    const { area, onRefresh, rerender } = setup({ refreshing: true, enabled: false })
+    rerender(<Harness onRefresh={onRefresh} refreshing={false} enabled={false} />)
+    rerender(<Harness onRefresh={onRefresh} refreshing={false} enabled />)
+    fireEvent.touchStart(area, at(100, 100))
+    fireEvent.touchMove(area, at(100, 300))
+    fireEvent.touchEnd(area)
+    expect(onRefresh).toHaveBeenCalledTimes(1)
+  })
+
+  it("doesn't refresh if a refresh started mid-pull", () => {
+    const { area, onRefresh, rerender } = setup()
+    fireEvent.touchStart(area, at(100, 100))
+    fireEvent.touchMove(area, at(100, 260))
+    rerender(<Harness onRefresh={onRefresh} refreshing />)
+    fireEvent.touchEnd(area)
+    expect(onRefresh).not.toHaveBeenCalled()
+  })
+
+  it("doesn't refresh if disabled mid-pull", () => {
+    const { area, onRefresh, rerender } = setup()
+    fireEvent.touchStart(area, at(100, 100))
+    fireEvent.touchMove(area, at(100, 260))
+    rerender(<Harness onRefresh={onRefresh} enabled={false} />)
+    fireEvent.touchEnd(area)
     expect(onRefresh).not.toHaveBeenCalled()
   })
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import { isArmed, pullDistance } from './pullToRefresh'
 
@@ -18,7 +18,7 @@ export function usePullToRefresh(
   const [distance, setDistance] = useState(0)
   // The listeners subscribe once, so they read the latest options from here.
   const latest = useRef(options)
-  useEffect(() => {
+  useLayoutEffect(() => {
     latest.current = options
   })
   const start = useRef<{ x: number; y: number } | null>(null)
@@ -28,6 +28,7 @@ export function usePullToRefresh(
   // The distance now, for touchend to read without waiting for a render.
   const current = useRef(0)
 
+  // The ref must point at an always-mounted element: the effect subscribes once.
   useEffect(() => {
     const el = ref.current
     if (!el) return
@@ -75,7 +76,9 @@ export function usePullToRefresh(
     }
 
     function handleTouchEnd() {
-      const shouldRefresh = start.current !== null && isArmed(current.current)
+      const { enabled, refreshing } = latest.current
+      const shouldRefresh =
+        start.current !== null && isArmed(current.current) && enabled && !refreshing
       reset()
       if (shouldRefresh) latest.current.onRefresh()
     }
