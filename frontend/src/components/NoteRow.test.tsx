@@ -39,6 +39,32 @@ describe('NoteRow', () => {
     expect(screen.getByText('Trip')).toBeInTheDocument()
   })
 
+  it("keeps the note's line breaks", () => {
+    renderRow({ note: { ...note, text: 'Trip\n- day 1' } })
+    const button = screen.getByRole('button', { name: /^Edit "Trip/ })
+    expect(button.textContent).toBe('Trip\n- day 1')
+    expect(button).toHaveClass('whitespace-pre-wrap')
+    expect(button).toHaveClass('wrap-anywhere')
+  })
+
+  it('lines the badge and Delete up with the first line', () => {
+    renderRow()
+    expect(screen.getByTestId('note-row-content')).toHaveClass('items-start')
+    expect(screen.getByTestId('note-row-content')).not.toHaveClass('items-center')
+  })
+
+  it('a multi-line note still deletes on a long swipe and opens on tap', () => {
+    const { onDelete, onEdit } = renderRow({ note: { ...note, text: 'Trip\n- day 1' } })
+    const content = screen.getByTestId('note-row-content')
+    swipe(content, 300, 150)
+    expect(onDelete).toHaveBeenCalledTimes(1)
+    // A tap always starts with a touchstart, which clears the swipe.
+    fireEvent.touchStart(content, { touches: [{ clientX: 200, clientY: 0 }] })
+    fireEvent.touchEnd(content, { changedTouches: [{ clientX: 200, clientY: 0 }] })
+    fireEvent.click(screen.getByRole('button', { name: /^Edit "Trip/ }))
+    expect(onEdit).toHaveBeenCalledTimes(1)
+  })
+
   it('marks notes added by an agent', () => {
     renderRow({ note: { ...note, source: 'api' } })
     expect(screen.getByLabelText('Added by an agent')).toHaveTextContent('agent')

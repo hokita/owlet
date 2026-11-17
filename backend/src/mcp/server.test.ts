@@ -110,6 +110,33 @@ describe('owlet MCP server', () => {
     expect(JSON.parse(textOf(result))).toEqual(note)
   })
 
+  it('add_note keeps line breaks', async () => {
+    vi.mocked(addNote).mockResolvedValue(note as never)
+    const result = await (
+      await connect()
+    ).callTool({
+      name: 'add_note',
+      arguments: { year: 2026, month: 11, type: 'event', text: 'a\r\nb' },
+    })
+    expect(result.isError).toBeFalsy()
+    expect(addNote).toHaveBeenCalledWith(2026, 11, {
+      type: 'event',
+      text: 'a\nb',
+      source: 'api',
+    })
+  })
+
+  it('says line breaks are allowed', async () => {
+    const { tools } = await (await connect()).listTools()
+    for (const name of ['add_note', 'update_note']) {
+      const props = tools.find((t) => t.name === name)?.inputSchema.properties as Record<
+        string,
+        { description?: string }
+      >
+      expect(props.text.description).toBe('1–500 characters; line breaks allowed')
+    }
+  })
+
   it('add_note accepts exactly 500 characters', async () => {
     vi.mocked(addNote).mockResolvedValue(note as never)
     const result = await (
@@ -133,14 +160,13 @@ describe('owlet MCP server', () => {
   })
 
   const MONTH = 'Invalid month: year must be 2000–2100 and month 1–12'
-  const TEXT = 'Invalid text: must be one line of 1–500 characters'
+  const TEXT = 'Invalid text: must be 1–500 characters'
   it.each([
     ['list_notes', { year: 2026, month: 13 }, MONTH],
     ['add_note', { year: 2026, month: 13, type: 'event', text: 'x' }, MONTH],
     ['delete_note', { year: 2026, month: 13, id: 'n1' }, MONTH],
     ['list_notes', { year: 1999, month: 1 }, MONTH],
     ['add_note', { year: 2026, month: 11, type: 'event', text: '   ' }, TEXT],
-    ['add_note', { year: 2026, month: 11, type: 'event', text: 'two\nlines' }, TEXT],
     ['add_note', { year: 2026, month: 11, type: 'event', text: 'x'.repeat(501) }, TEXT],
     ['delete_note', { year: 2026, month: 11, id: 'a/b' }, 'Invalid id'],
   ])('%s %j is a tool error', async (name, args, message) => {
@@ -155,6 +181,13 @@ describe('owlet MCP server', () => {
   describe('update_note', () => {
     const call = async (args: Record<string, unknown>) =>
       (await connect()).callTool({ name: 'update_note', arguments: args })
+
+    it('keeps line breaks', async () => {
+      vi.mocked(updateNote).mockResolvedValue({ year: 2026, month: 11, note } as never)
+      const result = await call({ year: 2026, month: 11, id: 'n1', text: 'a\nb' })
+      expect(result.isError).toBeFalsy()
+      expect(updateNote).toHaveBeenCalledWith(2026, 11, 'n1', { text: 'a\nb' })
+    })
 
     it('updates the note and returns where it lives', async () => {
       vi.mocked(updateNote).mockResolvedValue({ year: 2026, month: 11, note } as never)

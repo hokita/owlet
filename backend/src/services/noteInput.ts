@@ -22,10 +22,20 @@ function isNoteType(value: unknown): value is NoteType {
   return (NOTE_TYPES as readonly unknown[]).includes(value)
 }
 
+// Line breaks are kept as "\n"; the whole text is trimmed and runs of blank
+// lines (whitespace-only lines included) collapse to a single blank line.
+export function normalizeNoteText(value: string): string {
+  return value
+    .replace(/\r\n?/g, '\n')
+    .trim()
+    .replace(/\n[ \t]*\n(?:[ \t]*\n)+/g, '\n\n')
+}
+
+// Checks the length after normalizing, so a line break counts as one character.
 function parseText(value: unknown): string | null {
   if (typeof value !== 'string') return null
-  const text = value.trim()
-  if (!text || text.length > MAX_TEXT_LENGTH || /[\r\n]/.test(text)) return null
+  const text = normalizeNoteText(value)
+  if (!text || text.length > MAX_TEXT_LENGTH) return null
   return text
 }
 

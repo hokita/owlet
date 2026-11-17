@@ -1,8 +1,15 @@
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { beforeEach, describe, it, expect, vi } from 'vitest'
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
 import type { ComponentProps } from 'react'
 import Composer from './Composer'
 import type { Note } from '../notes'
+import {
+  installFakeResizeObserver,
+  observedElements,
+  setFormHeight,
+  triggerResize,
+  uninstallFakeResizeObserver,
+} from '../testing/fakeResizeObserver'
 
 const NOV_2026 = { year: 2026, month: 11 }
 const trip: Note = {
@@ -36,6 +43,10 @@ function type(text: string) {
 describe('Composer', () => {
   beforeEach(() => {
     localStorage.clear()
+  })
+
+  afterEach(() => {
+    uninstallFakeResizeObserver()
   })
 
   it('defaults to event', () => {
@@ -79,6 +90,89 @@ describe('Composer', () => {
     await waitFor(() => expect(screen.getByRole('textbox', { name: 'New note' })).toHaveValue(''))
   })
 
+  it('uses a textarea for new notes', () => {
+    render(composer())
+    const input = screen.getByRole('textbox', { name: 'New note' })
+    expect(input.tagName).toBe('TEXTAREA')
+    expect(input).toHaveAttribute('rows', '1')
+    expect(input).toHaveAttribute('maxlength', '500')
+    expect(input).toHaveAttribute('enterkeyhint', 'enter')
+    expect(input).toHaveAttribute('placeholder', 'Note…')
+    expect(input).toHaveClass('text-base')
+  })
+
+  it('Return inserts a line break, it does not submit', () => {
+    const onAdd = vi.fn()
+    render(composer({ onAdd }))
+    type('Trip')
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'New note' }), { key: 'Enter' })
+    expect(onAdd).not.toHaveBeenCalled()
+  })
+
+  it('submits multi-line text', async () => {
+    const onAdd = vi.fn().mockResolvedValue(undefined)
+    render(composer({ onAdd }))
+    type('  Trip\n- day 1  ')
+    fireEvent.click(screen.getByRole('button', { name: 'Add note' }))
+    expect(onAdd).toHaveBeenCalledWith({ type: 'event', text: 'Trip\n- day 1' })
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'New note' })).toHaveValue(''))
+  })
+
+  it.each(['metaKey', 'ctrlKey'])('%s+Return submits', async (modifier) => {
+    const onAdd = vi.fn().mockResolvedValue(undefined)
+    render(composer({ onAdd }))
+    type('Trip')
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'New note' }), {
+      key: 'Enter',
+      [modifier]: true,
+    })
+    expect(onAdd).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'New note' })).toHaveValue(''))
+  })
+
+  it('⌘+Return during an IME composition does not submit', () => {
+    const onAdd = vi.fn()
+    render(composer({ onAdd }))
+    type('Trip')
+    const input = screen.getByRole('textbox', { name: 'New note' })
+    fireEvent.keyDown(input, { key: 'Enter', metaKey: true, isComposing: true })
+    fireEvent.keyDown(input, { key: 'Enter', metaKey: true, keyCode: 229 })
+    expect(onAdd).not.toHaveBeenCalled()
+  })
+
+  it('Save, Cancel and ➤ stay at the bottom of the box', () => {
+    render(composer())
+    expect(screen.getByRole('textbox', { name: 'New note' }).parentElement).toHaveClass('items-end')
+  })
+
+  it('re-measures the box when switching between adding and editing', () => {
+    // jsdom has no layout: give the box 24px lines and a scrollHeight of one line per row of text.
+    const sheet = document.createElement('style')
+    sheet.textContent = 'textarea { line-height: 24px; padding: 8px 0; }'
+    document.head.append(sheet)
+    Object.defineProperty(HTMLTextAreaElement.prototype, 'scrollHeight', {
+      configurable: true,
+      get(this: HTMLTextAreaElement) {
+        return this.value.split('\n').length * 24 + 16
+      },
+    })
+    try {
+      const { rerender } = render(composer())
+      type('a\nb\nc')
+      const newBox = () => screen.getByRole('textbox', { name: 'New note' })
+      expect(newBox().style.height).toBe('90px')
+
+      rerender(composer({ editing: trip }))
+      expect(screen.getByRole('textbox', { name: 'Edit note' }).style.height).toBe('42px')
+
+      rerender(composer())
+      expect(newBox().style.height).toBe('90px')
+    } finally {
+      Reflect.deleteProperty(HTMLTextAreaElement.prototype, 'scrollHeight')
+      sheet.remove()
+    }
+  })
+
   it('ignores blank text', () => {
     const onAdd = vi.fn()
     render(composer({ onAdd }))
@@ -115,6 +209,55 @@ describe('Composer', () => {
     expect(screen.getByRole('button', { name: 'event' })).toHaveAttribute('aria-pressed', 'true')
   })
 
+  it('reports its height as it grows', () => {
+    installFakeResizeObserver()
+    setFormHeight(112)
+    const onHeightChange = vi.fn()
+    const { container, unmount } = render(composer({ onHeightChange }))
+    expect(onHeightChange).toHaveBeenLastCalledWith(112)
+    // The note box is observed too, for width changes.
+    expect(observedElements()).toContain(container.querySelector('form'))
+
+    setFormHeight(208)
+    triggerResize()
+    expect(onHeightChange).toHaveBeenLastCalledWith(208)
+
+    unmount()
+    expect(observedElements()).toEqual([])
+  })
+
+  it('renders without ResizeObserver', () => {
+    const onHeightChange = vi.fn()
+    render(composer({ onHeightChange }))
+    expect(onHeightChange).not.toHaveBeenCalled()
+  })
+
+  describe('character counter', () => {
+    it('shows no counter up to 400 characters', () => {
+      render(composer())
+      type('x'.repeat(400))
+      expect(screen.queryByText('400/500')).not.toBeInTheDocument()
+    })
+
+    it('shows the counter past 400, counting line breaks', () => {
+      render(composer())
+      type('x'.repeat(400) + '\n')
+      const counter = screen.getByText('401/500')
+      expect(screen.getByRole('textbox', { name: 'New note' })).toHaveAttribute(
+        'aria-describedby',
+        counter.id
+      )
+    })
+
+    it('the counter is not a live region', () => {
+      render(composer())
+      type('x'.repeat(401))
+      const counter = screen.getByText('401/500')
+      expect(counter).not.toHaveAttribute('aria-live')
+      expect(counter).not.toHaveAttribute('role', 'status')
+    })
+  })
+
   describe('editing', () => {
     function edit(props: Partial<ComponentProps<typeof Composer>> = {}) {
       return composer({ editing: trip, ...props })
@@ -135,6 +278,12 @@ describe('Composer', () => {
       expect(screen.queryByRole('button', { name: 'Add note' })).not.toBeInTheDocument()
     })
 
+    it('shows the counter in Edit mode', () => {
+      render(edit())
+      fireEvent.change(textbox(), { target: { value: 'y'.repeat(450) } })
+      expect(screen.getByText('450/500')).toBeInTheDocument()
+    })
+
     it('Save sends the trimmed text, type and month', () => {
       const onSave = vi.fn()
       render(edit({ onSave }))
@@ -149,11 +298,32 @@ describe('Composer', () => {
       })
     })
 
-    it('Enter saves', () => {
+    it('⌘+Return saves', () => {
       const onSave = vi.fn()
       render(edit({ onSave }))
-      fireEvent.submit(textbox())
+      fireEvent.keyDown(textbox(), { key: 'Enter', metaKey: true })
       expect(onSave).toHaveBeenCalled()
+    })
+
+    it('Return in Edit note does not save', () => {
+      const onSave = vi.fn()
+      render(edit({ onSave }))
+      fireEvent.keyDown(textbox(), { key: 'Enter' })
+      expect(onSave).not.toHaveBeenCalled()
+    })
+
+    it('both note textareas keep the 44px touch target (min-h-11)', () => {
+      const { unmount } = render(edit())
+      expect(textbox()).toHaveClass('min-h-11')
+      unmount()
+      render(composer())
+      expect(screen.getByRole('textbox', { name: 'New note' })).toHaveClass('min-h-11')
+    })
+
+    it("Edit note is a textarea with the note's line breaks", () => {
+      render(edit({ editing: { ...trip, text: 'a\nb' } }))
+      expect(textbox().tagName).toBe('TEXTAREA')
+      expect(textbox()).toHaveValue('a\nb')
     })
 
     it('Escape and Cancel cancel', () => {

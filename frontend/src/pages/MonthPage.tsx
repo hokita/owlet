@@ -23,6 +23,9 @@ const AUTO_REFRESH_MIN_MS = 30_000
 // Height (px) of the pull indicator while the spinner shows.
 const REFRESHING_HEIGHT = 48
 
+// The Composer's one-line height (px), used until it reports its own.
+const DEFAULT_COMPOSER_HEIGHT = 112
+
 const REFRESH_FAILED = "Couldn't refresh. Pull to try again."
 
 const SECTIONS: { type: NoteType; title: string }[] = [
@@ -64,6 +67,7 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
   const [notice, setNotice] = useState<string | null>(null)
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const keyboardInset = useKeyboardInset()
+  const [composerHeight, setComposerHeight] = useState(DEFAULT_COMPOSER_HEIGHT)
   // A refresh refetches the month without touching `loaded` or `loadError`,
   // and never clears the notes on screen, even when it fails.
   const [refreshing, setRefreshing] = useState(false)
@@ -327,7 +331,12 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
         </div>
       </header>
 
-      <main ref={mainRef} className="mx-auto max-w-2xl px-4 pt-4 pb-44">
+      <main
+        ref={mainRef}
+        className="mx-auto max-w-2xl px-4 pt-4"
+        // Room for the last note to scroll above the Composer.
+        style={{ paddingBottom: `calc(${composerHeight}px + 4rem)` }}
+      >
         {/* Not role="status": the Undo toast owns that role. */}
         <div
           aria-live="polite"
@@ -427,16 +436,17 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
       </main>
 
       {(pendingNote || notice) && (
-        // Sits just above the Composer, which is lifted by the same keyboard
-        // inset and is taller while editing.
+        // Sits just above the Composer: its measured height (which includes the
+        // safe-area padding) plus the keyboard inset that lifts it.
         <div
           role="status"
-          style={{ '--keyboard-inset': `${keyboardInset}px` } as CSSProperties}
-          className={`fixed inset-x-0 z-20 flex justify-center px-4 ${
-            editing
-              ? 'bottom-[calc(env(safe-area-inset-bottom)+9rem+var(--keyboard-inset))]'
-              : 'bottom-[calc(env(safe-area-inset-bottom)+7.5rem+var(--keyboard-inset))]'
-          }`}
+          style={
+            {
+              '--composer-height': `${composerHeight}px`,
+              '--keyboard-inset': `${keyboardInset}px`,
+            } as CSSProperties
+          }
+          className="fixed inset-x-0 bottom-[calc(var(--composer-height)+0.5rem+var(--keyboard-inset))] z-20 flex justify-center px-4"
         >
           {pendingNote ? (
             <div className="flex items-center gap-4 rounded-full bg-gray-900 py-1 pr-1 pl-5 text-sm text-white shadow-lg">
@@ -463,6 +473,7 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
         month={month}
         onSave={handleSave}
         onCancel={() => setEditing(null)}
+        onHeightChange={setComposerHeight}
       />
     </div>
   )

@@ -1,10 +1,14 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import type { FormEvent, KeyboardEvent } from 'react'
 import { MONTH_INPUT_MAX, MONTH_INPUT_MIN, parseMonthInput, toMonthInput } from '../month'
 import type { YearMonth } from '../month'
 import { NOTE_TYPES } from '../notes'
 import type { Note, NoteType } from '../notes'
+import { useAutoGrow } from '../useAutoGrow'
 import { useKeyboardInset } from '../useKeyboardInset'
+
+const NOTE_MAX = 500
+const COUNTER_FROM = 400
 
 const LAST_TYPE_KEY = 'owlet.lastNoteType'
 
@@ -36,9 +40,18 @@ interface ComposerProps {
   month: YearMonth
   onSave: (input: { type: NoteType; text: string; month: YearMonth }) => void
   onCancel: () => void
+  // Called with the bar's height (px, safe-area padding included) as it changes.
+  onHeightChange?: (height: number) => void
 }
 
-export default function Composer({ onAdd, editing, month, onSave, onCancel }: ComposerProps) {
+export default function Composer({
+  onAdd,
+  editing,
+  month,
+  onSave,
+  onCancel,
+  onHeightChange,
+}: ComposerProps) {
   const [type, setType] = useState<NoteType>(loadLastType)
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
@@ -47,9 +60,13 @@ export default function Composer({ onAdd, editing, month, onSave, onCancel }: Co
   const [editType, setEditType] = useState<NoteType>('event')
   const [editMonth, setEditMonth] = useState('')
   const [loadedId, setLoadedId] = useState<string | null>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
-  const editInputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const editInputRef = useRef<HTMLTextAreaElement>(null)
+  const formRef = useRef<HTMLFormElement>(null)
   const keyboardInset = useKeyboardInset()
+  const counterId = useId()
+  useAutoGrow(inputRef, text)
+  useAutoGrow(editInputRef, editText)
 
   // Load the fields when another note (or none) is being edited.
   const editingId = editing?.id ?? null
@@ -61,6 +78,18 @@ export default function Composer({ onAdd, editing, month, onSave, onCancel }: Co
       setEditMonth(toMonthInput(month))
     }
   }
+
+  // The bar grows with its text, the Editing line and the counter; the page
+  // places the toast and list padding from its measured height. Without
+  // ResizeObserver the page keeps its default.
+  useEffect(() => {
+    const form = formRef.current
+    if (!form || !onHeightChange || typeof ResizeObserver === 'undefined') return
+    onHeightChange(form.offsetHeight)
+    const observer = new ResizeObserver(() => onHeightChange(form.offsetHeight))
+    observer.observe(form)
+    return () => observer.disconnect()
+  }, [onHeightChange])
 
   // Opening a note (or switching to another) puts the cursor in its text.
   useEffect(() => {
@@ -78,6 +107,14 @@ export default function Composer({ onAdd, editing, month, onSave, onCancel }: Co
   function handleKeyDown(e: KeyboardEvent) {
     // While an IME is composing, Escape cancels the conversion, not the edit.
     if (editing && e.key === 'Escape' && !e.nativeEvent.isComposing) onCancel()
+  }
+
+  // Return adds a line; ⌘/Ctrl+Return sends. Not while an IME is converting.
+  function handleTextKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key !== 'Enter' || !(e.metaKey || e.ctrlKey)) return
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return
+    e.preventDefault()
+    e.currentTarget.form?.requestSubmit()
   }
 
   async function handleSubmit(e?: FormEvent) {
@@ -104,11 +141,16 @@ export default function Composer({ onAdd, editing, month, onSave, onCancel }: Co
     }
   }
 
+  const activeLength = (editing ? editText : text).length
+  const showCounter = activeLength > COUNTER_FROM
+  const describedBy = showCounter ? counterId : undefined
+
   const activeType = editing ? editType : type
   const setActiveType = editing ? setEditType : setType
 
   return (
     <form
+      ref={formRef}
       onSubmit={handleSubmit}
       onKeyDown={handleKeyDown}
       style={{ bottom: keyboardInset }}
@@ -144,18 +186,20 @@ export default function Composer({ onAdd, editing, month, onSave, onCancel }: Co
             />
           )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-end gap-2">
           {editing ? (
             <>
-              <input
+              <textarea
                 ref={editInputRef}
-                type="text"
+                rows={1}
                 aria-label="Edit note"
-                enterKeyHint="done"
-                maxLength={500}
+                enterKeyHint="enter"
+                maxLength={NOTE_MAX}
+                aria-describedby={describedBy}
                 value={editText}
                 onChange={(e) => setEditText(e.target.value)}
-                className="min-h-11 min-w-0 flex-1 rounded-lg border border-gray-300 px-3 text-base"
+                onKeyDown={handleTextKeyDown}
+                className="min-h-11 min-w-0 flex-1 resize-none rounded-lg border border-gray-300 px-3 py-2 text-base leading-6"
               />
               <button
                 type="button"
@@ -174,16 +218,18 @@ export default function Composer({ onAdd, editing, month, onSave, onCancel }: Co
             </>
           ) : (
             <>
-              <input
+              <textarea
                 ref={inputRef}
-                type="text"
+                rows={1}
                 aria-label="New note"
-                placeholder="One-line note…"
-                enterKeyHint="send"
-                maxLength={500}
+                placeholder="Note…"
+                enterKeyHint="enter"
+                maxLength={NOTE_MAX}
+                aria-describedby={describedBy}
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                className="min-h-11 min-w-0 flex-1 rounded-lg border border-gray-300 px-3 text-base"
+                onKeyDown={handleTextKeyDown}
+                className="min-h-11 min-w-0 flex-1 resize-none rounded-lg border border-gray-300 px-3 py-2 text-base leading-6"
               />
               <button
                 type="submit"
@@ -196,6 +242,11 @@ export default function Composer({ onAdd, editing, month, onSave, onCancel }: Co
             </>
           )}
         </div>
+        {showCounter && (
+          <p id={counterId} className="text-right text-xs text-gray-500">
+            {activeLength}/{NOTE_MAX}
+          </p>
+        )}
       </div>
     </form>
   )

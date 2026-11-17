@@ -47,3 +47,24 @@ test('the API token cannot use the REST API', async ({ request }) => {
     (await request.delete(`${API_URL}/api/reviews/2001/6/notes/x`, { headers })).status()
   ).toBe(401)
 })
+
+test('Muse adds a multi-line note over MCP and the app shows its lines', async ({
+  page,
+  request,
+}) => {
+  const body = await addNoteOverMcp(request, {
+    year: 2001,
+    month: 6,
+    type: 'learn',
+    text: `agent lines ${run}\r\nline 2`,
+  })
+  expect(body).not.toContain('"isError":true')
+
+  await signIn(page)
+  await page.goto('/2001/6')
+  const row = page.getByRole('listitem').filter({ hasText: `agent lines ${run}` })
+  await expect(row.getByRole('img', { name: 'Added by an agent' })).toBeVisible()
+  const text = row.getByRole('button', { name: /^Edit "/ })
+  await expect(text).toBeVisible()
+  expect(await text.innerText()).toBe(`agent lines ${run}\nline 2`)
+})
