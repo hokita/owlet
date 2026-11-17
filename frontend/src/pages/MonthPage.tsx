@@ -332,7 +332,13 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
         </div>
       )}
 
-      <Composer onAdd={handleAdd} />
+      <Composer
+        onAdd={handleAdd}
+        editing={null}
+        month={month}
+        onSave={() => {}}
+        onCancel={() => {}}
+      />
     </div>
   )
 }
