@@ -90,3 +90,29 @@ describe('api.deleteNote', () => {
     expect(json).not.toHaveBeenCalled()
   })
 })
+
+describe('api.updateNote', () => {
+  it('sends PATCH with the body to the encoded note path', async () => {
+    mockFetch.mockResolvedValue({ ok: true, status: 200, json: async () => note })
+    const result = await api.updateNote({ year: 2026, month: 11 }, 'n/1', {
+      text: 'x',
+      moveTo: { year: 2026, month: 12 },
+    })
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://api.test/api/reviews/2026/11/notes/n%2F1',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({ text: 'x', moveTo: { year: 2026, month: 12 } }),
+        headers: expect.objectContaining({ Authorization: 'Bearer fake-token' }),
+      })
+    )
+    expect(result).toEqual(note)
+  })
+
+  it('throws on 404', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 404 })
+    await expect(api.updateNote({ year: 2026, month: 11 }, 'n1', { text: 'x' })).rejects.toThrow(
+      'API error: 404'
+    )
+  })
+})

@@ -41,6 +41,43 @@ export function parseNoteInput(input: {
   return { ok: true, type: input.type, text }
 }
 
+export interface NoteUpdate {
+  type?: NoteType
+  text?: string
+  moveTo?: { year: number; month: number }
+}
+
+// Every field is optional, but one that is present must be valid. Unknown
+// fields (such as source) are dropped, so an edit cannot change them.
+export function parseNoteUpdate(input: { type?: unknown; text?: unknown; moveTo?: unknown }):
+  | { ok: true; update: NoteUpdate }
+  | {
+      ok: false
+      error: 'Invalid type' | 'Invalid text' | 'Invalid month' | 'Nothing to update'
+    } {
+  const update: NoteUpdate = {}
+  if (input.type !== undefined) {
+    if (!isNoteType(input.type)) return { ok: false, error: 'Invalid type' }
+    update.type = input.type
+  }
+  if (input.text !== undefined) {
+    const text = parseText(input.text)
+    if (text === null) return { ok: false, error: 'Invalid text' }
+    update.text = text
+  }
+  if (input.moveTo !== undefined) {
+    const target = input.moveTo as { year?: unknown; month?: unknown } | null
+    const moveTo =
+      typeof target === 'object' && target !== null
+        ? parseYearMonth(target.year, target.month)
+        : null
+    if (moveTo === null) return { ok: false, error: 'Invalid month' }
+    update.moveTo = moveTo
+  }
+  if (Object.keys(update).length === 0) return { ok: false, error: 'Nothing to update' }
+  return { ok: true, update }
+}
+
 // A Firestore doc id: a "/" would point the delete at a different path.
 export function parseNoteId(id: unknown): string | null {
   if (typeof id !== 'string' || !id || id.includes('/')) return null

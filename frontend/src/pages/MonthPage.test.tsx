@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
 
 const { mockSignOut, mockApi } = vi.hoisted(() => ({
   mockSignOut: vi.fn().mockResolvedValue(undefined),
-  mockApi: { getReview: vi.fn(), addNote: vi.fn(), deleteNote: vi.fn() },
+  mockApi: { getReview: vi.fn(), addNote: vi.fn(), deleteNote: vi.fn(), updateNote: vi.fn() },
 }))
 
 vi.mock('firebase/auth', () => ({ signOut: mockSignOut }))
@@ -492,6 +492,453 @@ describe('MonthPage', () => {
       render(<MonthPage month={november} onNavigate={vi.fn()} />)
       pull(200)
       expect(mockApi.getReview).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('editing', () => {
+    const tripEdited = { ...trip, text: 'Trip!', source: 'app' }
+
+    const editBox = () => screen.getByRole('textbox', { name: 'Edit note' })
+
+    function openEdit(text: string) {
+      fireEvent.click(screen.getByRole('button', { name: `Edit "${text}"` }))
+    }
+
+    function setText(text: string) {
+      fireEvent.change(editBox(), { target: { value: text } })
+    }
+
+    function setMonth(value: string) {
+      fireEvent.change(screen.getByLabelText('Month'), { target: { value } })
+    }
+
+    function save() {
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    }
+
+    // The next updateNote call is held open until the test settles it.
+    function deferUpdate() {
+      let settle: (fn: (r: (v: unknown) => void, j: (e: Error) => void) => void) => void = () => {}
+      mockApi.updateNote.mockReturnValueOnce(
+        new Promise((res, rej) => (settle = (fn) => fn(res, rej)))
+      )
+      return {
+        resolve: (note: unknown) => act(async () => settle((res) => res(note))),
+        reject: (message: string) => act(async () => settle((_, rej) => rej(new Error(message)))),
+      }
+    }
+
+    it('tapping a note opens it in the Composer and highlights it', async () => {
+      await renderLoaded()
+      openEdit('Trip')
+      expect(screen.getByText('Editing')).toBeInTheDocument()
+      expect(editBox()).toHaveValue('Trip')
+      expect(screen.getByText('Trip').closest('li')).toHaveAttribute('aria-current', 'true')
+    })
+
+    it('saving a text and type change updates the row in place', async () => {
+      await renderLoaded()
+      const update = deferUpdate()
+      openEdit('Trip')
+      setText('Trip!')
+      fireEvent.click(screen.getByRole('button', { name: 'learn' }))
+      save()
+
+      expect(mockApi.updateNote).toHaveBeenCalledWith(november, 'n1', {
+        text: 'Trip!',
+        type: 'learn',
+      })
+      expect(within(section('Learns')).getByText('Trip!')).toBeInTheDocument()
+      expect(within(section('Events')).queryByText('Trip')).not.toBeInTheDocument()
+      expect(screen.getByRole('textbox', { name: 'New note' })).toBeInTheDocument()
+
+      await update.resolve({ ...tripEdited, type: 'learn' })
+      expect(within(section('Learns')).getByText('Trip!')).toBeInTheDocument()
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+
+    it('Enter saves', async () => {
+      await renderLoaded()
+      mockApi.updateNote.mockResolvedValue(tripEdited)
+      openEdit('Trip')
+      setText('Trip!')
+      fireEvent.submit(editBox())
+      expect(mockApi.updateNote).toHaveBeenCalledWith(november, 'n1', { text: 'Trip!' })
+      expect(await screen.findByText('Trip!')).toBeInTheDocument()
+    })
+
+    it('saving nothing changed sends nothing', async () => {
+      await renderLoaded()
+      openEdit('Trip')
+      save()
+      expect(mockApi.updateNote).not.toHaveBeenCalled()
+      expect(screen.getByRole('textbox', { name: 'New note' })).toBeInTheDocument()
+    })
+
+    it('moving shows the notice and removes the row', async () => {
+      await renderLoaded()
+      vi.useFakeTimers()
+      const update = deferUpdate()
+      openEdit('Trip')
+      setMonth('2026-12')
+      save()
+
+      expect(mockApi.updateNote).toHaveBeenCalledWith(november, 'n1', {
+        moveTo: { year: 2026, month: 12 },
+      })
+      expect(screen.queryByText('Trip')).not.toBeInTheDocument()
+
+      await update.resolve(trip)
+      expect(screen.getByRole('status')).toHaveTextContent('Saved and moved to Dec 2026')
+      expect(screen.queryByText('Trip')).not.toBeInTheDocument()
+
+      await act(async () => vi.advanceTimersByTime(5000))
+      expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    })
+
+    it('moving to the same month is an in-place edit', async () => {
+      await renderLoaded()
+      mockApi.updateNote.mockResolvedValue(tripEdited)
+      openEdit('Trip')
+      setText('Trip!')
+      setMonth('2026-11')
+      save()
+
+      expect(mockApi.updateNote).toHaveBeenCalledWith(november, 'n1', { text: 'Trip!' })
+      expect(await within(section('Events')).findByText('Trip!')).toBeInTheDocument()
+      expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    })
+
+    it('a failed save puts the note back and shows an error', async () => {
+      await renderLoaded()
+      mockApi.updateNote.mockRejectedValue(new Error('API error: 500'))
+      openEdit('Trip')
+      setText('Trip!')
+      fireEvent.click(screen.getByRole('button', { name: 'learn' }))
+      save()
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('Could not save: API error: 500')
+      expect(within(section('Events')).getByText('Trip')).toBeInTheDocument()
+      expect(screen.queryByText('Trip!')).not.toBeInTheDocument()
+    })
+
+    it('a failed move puts the note back and shows an error', async () => {
+      await renderLoaded()
+      mockApi.updateNote.mockRejectedValue(new Error('API error: 500'))
+      openEdit('Trip')
+      setMonth('2026-12')
+      save()
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('Could not save: API error: 500')
+      const events = within(section('Events')).getAllByRole('listitem')
+      expect(events[0]).toHaveTextContent('Trip')
+      expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    })
+
+    it('a save of a deleted note removes it and says so', async () => {
+      await renderLoaded()
+      mockApi.updateNote.mockRejectedValue(new Error('API error: 404'))
+      openEdit('Trip')
+      setText('Trip!')
+      save()
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Could not save: the note no longer exists'
+      )
+      expect(screen.queryByText('Trip')).not.toBeInTheDocument()
+      expect(screen.queryByText('Trip!')).not.toBeInTheDocument()
+    })
+
+    it('a save of a deleted note clears its Undo so it cannot come back', async () => {
+      await renderLoaded()
+      const update = deferUpdate()
+      openEdit('Trip')
+      setText('Trip!')
+      save()
+      vi.useFakeTimers()
+      fireEvent.click(screen.getByRole('button', { name: 'Delete "Trip!"' }))
+      expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument()
+
+      await update.reject('API error: 404')
+      expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('status')).not.toBeInTheDocument()
+      expect(screen.queryByText('Trip!')).not.toBeInTheDocument()
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Could not save: the note no longer exists'
+      )
+      await act(async () => vi.advanceTimersByTime(6000))
+      expect(mockApi.deleteNote).not.toHaveBeenCalled()
+    })
+
+    it('saving after a refresh sends only the fields the user changed', async () => {
+      await renderLoaded()
+      openEdit('Trip')
+      const review = deferReview()
+      pull(200)
+      await review.resolve([{ ...trip, text: 'Trip (Muse)' }, firestore, run])
+      const update = deferUpdate()
+      fireEvent.click(screen.getByRole('button', { name: 'learn' }))
+      save()
+
+      expect(mockApi.updateNote).toHaveBeenCalledWith(november, 'n1', { type: 'learn' })
+      expect(within(section('Learns')).getByText('Trip (Muse)')).toBeInTheDocument()
+      await update.resolve({ ...trip, text: 'Trip (Muse)', type: 'learn' })
+      expect(within(section('Learns')).getByText('Trip (Muse)')).toBeInTheDocument()
+    })
+
+    it('saving with nothing changed after a refresh sends nothing', async () => {
+      await renderLoaded()
+      openEdit('Trip')
+      const review = deferReview()
+      pull(200)
+      await review.resolve([{ ...trip, text: 'Trip (Muse)' }, firestore, run])
+      save()
+
+      expect(mockApi.updateNote).not.toHaveBeenCalled()
+      expect(screen.getByText('Trip (Muse)')).toBeInTheDocument()
+    })
+
+    it('tapping the open note again after a refresh keeps what it opened with', async () => {
+      await renderLoaded()
+      openEdit('Trip')
+      const review = deferReview()
+      pull(200)
+      await review.resolve([{ ...trip, text: 'Trip (Muse)' }, firestore, run])
+      openEdit('Trip (Muse)')
+      save()
+
+      expect(mockApi.updateNote).not.toHaveBeenCalled()
+      expect(screen.getByText('Trip (Muse)')).toBeInTheDocument()
+    })
+
+    it('the agent badge stays after an edit', async () => {
+      await renderLoaded([trip, muse])
+      const update = deferUpdate()
+      openEdit('Muse note')
+      setText('Muse note!')
+      save()
+
+      const badge = () =>
+        within(screen.getByText('Muse note!').closest('li')!).getByRole('img', {
+          name: 'Added by an agent',
+        })
+      expect(badge()).toBeInTheDocument()
+      await update.resolve({ ...muse, text: 'Muse note!', source: 'api' })
+      expect(badge()).toBeInTheDocument()
+    })
+
+    it('a refresh during a save keeps the edit', async () => {
+      await renderLoaded()
+      const review = deferReview()
+      pull(200)
+      const update = deferUpdate()
+      openEdit('Trip')
+      setText('Trip!')
+      save()
+
+      await review.resolve([trip, firestore, run])
+      expect(within(section('Events')).getByText('Trip!')).toBeInTheDocument()
+      await update.resolve(tripEdited)
+      expect(within(section('Events')).getByText('Trip!')).toBeInTheDocument()
+    })
+
+    it.each(['the save', 'the refresh'])(
+      'a refresh started during a save keeps the edit (%s answers first)',
+      async (first) => {
+        await renderLoaded()
+        const update = deferUpdate()
+        openEdit('Trip')
+        setText('Trip!')
+        save()
+        const review = deferReview()
+        pull(200)
+
+        if (first === 'the save') {
+          await update.resolve(tripEdited)
+          await review.resolve([trip, firestore, run])
+        } else {
+          await review.resolve([trip, firestore, run])
+          await update.resolve(tripEdited)
+        }
+        expect(within(section('Events')).getByText('Trip!')).toBeInTheDocument()
+        expect(screen.queryByText('Trip')).not.toBeInTheDocument()
+      }
+    )
+
+    it("a moved note doesn't come back on a refresh", async () => {
+      await renderLoaded()
+      const update = deferUpdate()
+      openEdit('Trip')
+      setMonth('2026-12')
+      save()
+      const review = deferReview()
+      pull(200)
+
+      await review.resolve([trip, firestore, run])
+      expect(screen.queryByText('Trip')).not.toBeInTheDocument()
+      await update.resolve(trip)
+      expect(screen.queryByText('Trip')).not.toBeInTheDocument()
+    })
+
+    it("a note moved during a refresh doesn't come back", async () => {
+      await renderLoaded()
+      const review = deferReview()
+      pull(200)
+      const update = deferUpdate()
+      openEdit('Trip')
+      setMonth('2026-12')
+      save()
+
+      await review.resolve([trip, firestore, run])
+      expect(screen.queryByText('Trip')).not.toBeInTheDocument()
+      await update.resolve(trip)
+      expect(screen.queryByText('Trip')).not.toBeInTheDocument()
+    })
+
+    it.each(['an edit', 'a move'])(
+      'a failed save during a refresh still reverts (%s)',
+      async (kind) => {
+        await renderLoaded()
+        const update = deferUpdate()
+        openEdit('Trip')
+        if (kind === 'an edit') setText('Trip!')
+        else setMonth('2026-12')
+        save()
+        const review = deferReview()
+        pull(200)
+
+        await update.reject('API error: 500')
+        await review.resolve([trip, firestore, run])
+        expect(within(section('Events')).getByText('Trip')).toBeInTheDocument()
+        expect(screen.queryByText('Trip!')).not.toBeInTheDocument()
+        expect(screen.getByRole('alert')).toHaveTextContent('Could not save: API error: 500')
+      }
+    )
+
+    it('deleting the note being edited ends edit mode', async () => {
+      await renderLoaded()
+      openEdit('Trip')
+      fireEvent.click(screen.getByRole('button', { name: 'Delete "Trip"' }))
+      expect(screen.queryByText('Editing')).not.toBeInTheDocument()
+      expect(screen.getByRole('textbox', { name: 'New note' })).toBeInTheDocument()
+    })
+
+    it('deleting another note keeps edit mode', async () => {
+      await renderLoaded()
+      openEdit('Trip')
+      fireEvent.click(screen.getByRole('button', { name: 'Delete "Run"' }))
+      expect(editBox()).toHaveValue('Trip')
+    })
+
+    it('lifts the toast above the taller Composer while editing', async () => {
+      await renderLoaded()
+      fireEvent.click(screen.getByRole('button', { name: 'Delete "Run"' }))
+      expect(screen.getByRole('status').className).toContain('7.5rem')
+      openEdit('Trip')
+      expect(screen.getByRole('status').className).toContain('9rem')
+    })
+
+    it('Undo after a save restores the saved copy', async () => {
+      await renderLoaded()
+      const update = deferUpdate()
+      openEdit('Trip')
+      setText('Trip!')
+      save()
+      fireEvent.click(screen.getByRole('button', { name: 'Delete "Trip!"' }))
+
+      await update.resolve(tripEdited)
+      expect(screen.queryByText('Trip!')).not.toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+      expect(within(section('Events')).getByText('Trip!')).toBeInTheDocument()
+    })
+
+    it('Undo after a failed save restores the previous copy', async () => {
+      await renderLoaded()
+      const update = deferUpdate()
+      openEdit('Trip')
+      setText('Trip!')
+      save()
+      fireEvent.click(screen.getByRole('button', { name: 'Delete "Trip!"' }))
+
+      await update.reject('API error: 500')
+      expect(screen.queryByText('Trip')).not.toBeInTheDocument()
+      expect(screen.queryByText('Trip!')).not.toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+      expect(within(section('Events')).getByText('Trip')).toBeInTheDocument()
+    })
+
+    it('a failed delete sent during a failed save restores the last saved copy', async () => {
+      await renderLoaded()
+      const update = deferUpdate()
+      let failDelete: () => Promise<void> = async () => {}
+      mockApi.deleteNote.mockReturnValue(
+        new Promise<void>((_, reject) => {
+          failDelete = () => act(async () => reject(new Error('API error: 500')))
+        })
+      )
+      openEdit('Trip')
+      setText('Trip!')
+      fireEvent.click(screen.getByRole('button', { name: 'learn' }))
+      save()
+      vi.useFakeTimers()
+      fireEvent.click(screen.getByRole('button', { name: 'Delete "Trip!"' }))
+      await act(async () => vi.advanceTimersByTime(5000))
+      expect(mockApi.deleteNote).toHaveBeenCalledWith(november, 'n1')
+
+      await update.reject('API error: 500')
+      expect(screen.queryByText('Trip')).not.toBeInTheDocument()
+      await failDelete()
+
+      expect(within(section('Events')).getByText('Trip')).toBeInTheDocument()
+      expect(screen.queryByText('Trip!')).not.toBeInTheDocument()
+      expect(screen.getByRole('alert')).toHaveTextContent('Could not delete: API error: 500')
+    })
+
+    it("a note can't be edited again while its save is in flight", async () => {
+      await renderLoaded()
+      const update = deferUpdate()
+      openEdit('Trip')
+      setText('Trip!')
+      save()
+
+      expect(screen.getByRole('button', { name: 'Edit "Trip!"' })).toBeDisabled()
+      await update.resolve(tripEdited)
+      expect(screen.getByRole('button', { name: 'Edit "Trip!"' })).toBeEnabled()
+    })
+
+    it("a swipe on a note doesn't open it", async () => {
+      await renderLoaded()
+      const row = screen.getAllByTestId('note-row-content')[0]
+      fireEvent.touchStart(row, at(100, 300))
+      fireEvent.touchMove(row, at(100, 250))
+      fireEvent.touchEnd(row)
+      openEdit('Trip')
+      expect(screen.queryByText('Editing')).not.toBeInTheDocument()
+    })
+
+    it('pull to refresh still works while editing', async () => {
+      await renderLoaded()
+      openEdit('Trip')
+      setText('Trip draft')
+      const review = deferReview()
+      pull(200)
+      expect(mockApi.getReview).toHaveBeenCalledTimes(2)
+
+      await review.resolve([trip, firestore, run])
+      expect(editBox()).toHaveValue('Trip draft')
+    })
+
+    it('the Undo toast replaces the moved notice', async () => {
+      await renderLoaded()
+      mockApi.updateNote.mockResolvedValue(trip)
+      openEdit('Trip')
+      setMonth('2026-12')
+      save()
+      expect(await screen.findByRole('status')).toHaveTextContent('Saved and moved to Dec 2026')
+
+      fireEvent.click(screen.getByRole('button', { name: 'Delete "Run"' }))
+      expect(screen.getAllByRole('status')).toHaveLength(1)
+      expect(screen.getByRole('status')).toHaveTextContent('Deleted')
     })
   })
 
