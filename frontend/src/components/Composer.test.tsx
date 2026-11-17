@@ -134,6 +134,34 @@ describe('Composer', () => {
     expect(screen.getByRole('textbox', { name: 'New note' }).parentElement).toHaveClass('items-end')
   })
 
+  it('re-measures the box when switching between adding and editing', () => {
+    // jsdom has no layout: give the box 24px lines and a scrollHeight of one line per row of text.
+    const sheet = document.createElement('style')
+    sheet.textContent = 'textarea { line-height: 24px; padding: 8px 0; }'
+    document.head.append(sheet)
+    Object.defineProperty(HTMLTextAreaElement.prototype, 'scrollHeight', {
+      configurable: true,
+      get(this: HTMLTextAreaElement) {
+        return this.value.split('\n').length * 24 + 16
+      },
+    })
+    try {
+      const { rerender } = render(composer())
+      type('a\nb\nc')
+      const newBox = () => screen.getByRole('textbox', { name: 'New note' })
+      expect(newBox().style.height).toBe('90px')
+
+      rerender(composer({ editing: trip }))
+      expect(screen.getByRole('textbox', { name: 'Edit note' }).style.height).toBe('42px')
+
+      rerender(composer())
+      expect(newBox().style.height).toBe('90px')
+    } finally {
+      Reflect.deleteProperty(HTMLTextAreaElement.prototype, 'scrollHeight')
+      sheet.remove()
+    }
+  })
+
   it('ignores blank text', () => {
     const onAdd = vi.fn()
     render(composer({ onAdd }))

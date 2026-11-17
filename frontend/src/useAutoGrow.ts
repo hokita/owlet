@@ -5,9 +5,12 @@ import type { RefObject } from 'react'
 // Not CSS field-sizing: iOS Safari support is too recent to rely on.
 export function useAutoGrow(
   ref: RefObject<HTMLTextAreaElement | null>,
-  value: string,
+  // Not read: it only makes callers re-render, and so re-measure, when the text changes.
+  _value: string,
   maxLines = 5
 ) {
+  // No dependency list: the same textarea element can be handed to a different
+  // field (new note <-> edit), and a stale height would stay behind.
   useLayoutEffect(() => {
     const el = ref.current
     if (!el) return
@@ -21,5 +24,5 @@ export function useAutoGrow(
     const wanted = el.scrollHeight + borders
     el.style.height = `${Math.min(wanted, max)}px`
     el.style.overflowY = wanted > max ? 'auto' : 'hidden'
-  }, [ref, value, maxLines])
+  })
 }
