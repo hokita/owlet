@@ -1,5 +1,16 @@
 import { describe, it, expect } from 'vitest'
-import { currentMonth, formatMonth, monthPath, parseMonthPath, shiftMonth } from './month'
+import {
+  currentMonth,
+  formatMonth,
+  formatShortMonth,
+  MONTH_INPUT_MAX,
+  MONTH_INPUT_MIN,
+  monthPath,
+  parseMonthInput,
+  parseMonthPath,
+  shiftMonth,
+  toMonthInput,
+} from './month'
 
 describe('parseMonthPath', () => {
   it.each([
@@ -47,5 +58,35 @@ describe('formatMonth', () => {
 describe('currentMonth', () => {
   it('uses the local date', () => {
     expect(currentMonth(new Date(2026, 0, 31))).toEqual({ year: 2026, month: 1 })
+  })
+})
+
+describe('toMonthInput', () => {
+  it('formats as YYYY-MM with a zero-padded month', () => {
+    expect(toMonthInput({ year: 2001, month: 9 })).toBe('2001-09')
+    expect(toMonthInput({ year: 2026, month: 11 })).toBe('2026-11')
+  })
+})
+
+describe('parseMonthInput', () => {
+  it('parses YYYY-MM', () => {
+    expect(parseMonthInput('2001-09')).toEqual({ year: 2001, month: 9 })
+  })
+
+  it.each(['', '1999-12', '2101-01', '2026-13', '2026-9'])('rejects %j', (value) => {
+    expect(parseMonthInput(value)).toBeNull()
+  })
+})
+
+describe('formatShortMonth', () => {
+  it('formats as a short month and year', () => {
+    expect(formatShortMonth({ year: 2001, month: 9 })).toBe('Sep 2001')
+  })
+})
+
+describe('MONTH_INPUT bounds', () => {
+  it('match the accepted range', () => {
+    expect(MONTH_INPUT_MIN).toBe('2000-01')
+    expect(MONTH_INPUT_MAX).toBe('2100-12')
   })
 })

@@ -25,6 +25,12 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json()
 }
 
+export interface NoteUpdate {
+  type?: NoteType
+  text?: string
+  moveTo?: YearMonth
+}
+
 const reviewPath = ({ year, month }: YearMonth) => `/api/reviews/${year}/${month}`
 
 export const api = {
@@ -33,4 +39,9 @@ export const api = {
     request<Note>(`${reviewPath(ym)}/notes`, { method: 'POST', body: JSON.stringify(input) }),
   deleteNote: (ym: YearMonth, id: string) =>
     request<void>(`${reviewPath(ym)}/notes/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  updateNote: (ym: YearMonth, id: string, update: NoteUpdate) =>
+    request<Note>(`${reviewPath(ym)}/notes/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(update),
+    }),
 }

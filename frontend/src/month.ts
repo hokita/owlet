@@ -7,8 +7,26 @@ export interface YearMonth {
 const MIN_YEAR = 2000
 const MAX_YEAR = 2100
 
+// The same range as <input type="month"> min/max.
+export const MONTH_INPUT_MIN = `${MIN_YEAR}-01`
+export const MONTH_INPUT_MAX = `${MAX_YEAR}-12`
+
 export function parseMonthPath(pathname: string): YearMonth | null {
   const match = /^\/(\d{4})\/(\d{1,2})\/?$/.exec(pathname)
+  if (!match) return null
+  const year = Number(match[1])
+  const month = Number(match[2])
+  if (year < MIN_YEAR || year > MAX_YEAR || month < 1 || month > 12) return null
+  return { year, month }
+}
+
+export function toMonthInput({ year, month }: YearMonth): string {
+  return `${year}-${String(month).padStart(2, '0')}`
+}
+
+// Parses the YYYY-MM value of <input type="month">; '' (cleared) is null.
+export function parseMonthInput(value: string): YearMonth | null {
+  const match = /^(\d{4})-(\d{2})$/.exec(value)
   if (!match) return null
   const year = Number(match[1])
   const month = Number(match[2])
@@ -28,6 +46,13 @@ export function shiftMonth({ year, month }: YearMonth, delta: number): YearMonth
 export function formatMonth({ year, month }: YearMonth): string {
   return new Date(year, month - 1, 1).toLocaleDateString('en-US', {
     month: 'long',
+    year: 'numeric',
+  })
+}
+
+export function formatShortMonth({ year, month }: YearMonth): string {
+  return new Date(year, month - 1, 1).toLocaleDateString('en-US', {
+    month: 'short',
     year: 'numeric',
   })
 }
