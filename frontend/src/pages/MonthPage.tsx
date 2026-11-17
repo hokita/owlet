@@ -391,7 +391,11 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
                           key={note.id}
                           note={note}
                           onDelete={() => handleDelete(note)}
-                          onEdit={() => setEditing(note)}
+                          // Tapping the note that's already open keeps the copy
+                          // it opened with: the Composer doesn't reload it, so a
+                          // refreshed copy here would turn its stale fields into
+                          // changes and undo Muse's update.
+                          onEdit={() => setEditing((cur) => (cur?.id === note.id ? cur : note))}
                           editing={editing?.id === note.id}
                           editDisabled={savingIds.has(note.id)}
                         />

@@ -698,6 +698,19 @@ describe('MonthPage', () => {
       expect(screen.getByText('Trip (Muse)')).toBeInTheDocument()
     })
 
+    it('tapping the open note again after a refresh keeps what it opened with', async () => {
+      await renderLoaded()
+      openEdit('Trip')
+      const review = deferReview()
+      pull(200)
+      await review.resolve([{ ...trip, text: 'Trip (Muse)' }, firestore, run])
+      openEdit('Trip (Muse)')
+      save()
+
+      expect(mockApi.updateNote).not.toHaveBeenCalled()
+      expect(screen.getByText('Trip (Muse)')).toBeInTheDocument()
+    })
+
     it('the agent badge stays after an edit', async () => {
       await renderLoaded([trip, muse])
       const update = deferUpdate()
