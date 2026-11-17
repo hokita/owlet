@@ -215,7 +215,8 @@ describe('Composer', () => {
     const onHeightChange = vi.fn()
     const { container, unmount } = render(composer({ onHeightChange }))
     expect(onHeightChange).toHaveBeenLastCalledWith(112)
-    expect(observedElements()).toEqual([container.querySelector('form')])
+    // The note box is observed too, for width changes.
+    expect(observedElements()).toContain(container.querySelector('form'))
 
     setFormHeight(208)
     triggerResize()
