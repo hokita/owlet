@@ -10,7 +10,7 @@ import type { RateLimiter } from '../middleware/rateLimit'
 const MONTH_ERROR = 'Invalid month: year must be 2000–2100 and month 1–12'
 const ERRORS = {
   'Invalid type': 'Invalid type: must be event, learn or next',
-  'Invalid text': 'Invalid text: must be one line of 1–500 characters',
+  'Invalid text': 'Invalid text: must be 1–500 characters',
 } as const
 
 const yearMonth = {
@@ -68,13 +68,13 @@ export function createOwletMcpServer({ limiter }: { limiter: RateLimiter }): Mcp
   server.registerTool(
     'add_note',
     {
-      description: 'Add a note to a month in owlet.',
+      description: 'Add a note to a month in owlet. The text may have several lines.',
       inputSchema: z.object({
         ...yearMonth,
         type: z
           .enum(NOTE_TYPES)
           .describe('event: something that happened; learn: something learned; next: a next step'),
-        text: z.string().describe('One line, 1–500 characters'),
+        text: z.string().describe('1–500 characters; line breaks allowed'),
       }),
       annotations: { destructiveHint: false },
     },
@@ -104,7 +104,7 @@ export function createOwletMcpServer({ limiter }: { limiter: RateLimiter }): Mcp
           .enum(NOTE_TYPES)
           .optional()
           .describe('event: something that happened; learn: something learned; next: a next step'),
-        text: z.string().optional().describe('One line, 1–500 characters'),
+        text: z.string().optional().describe('1–500 characters; line breaks allowed'),
         moveTo: z.object(yearMonth).optional().describe('Month to move the note to'),
       }),
       annotations: { destructiveHint: true, idempotentHint: false },

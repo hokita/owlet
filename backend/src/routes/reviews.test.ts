@@ -91,13 +91,25 @@ describe('reviews routes', () => {
       expect(addNote).toHaveBeenCalledWith(2026, 11, { type: 'event', text: 'Trip', source: 'app' })
     })
 
+    it('stores line breaks, normalized', async () => {
+      vi.mocked(addNote).mockResolvedValue(note as never)
+      const res = await request(app)
+        .post('/api/reviews/2026/11/notes')
+        .send({ type: 'event', text: 'Trip\r\n\r\n\r\n- day 1\r\n' })
+      expect(res.status).toBe(201)
+      expect(addNote).toHaveBeenCalledWith(2026, 11, {
+        type: 'event',
+        text: 'Trip\n\n- day 1',
+        source: 'app',
+      })
+    })
+
     it.each([
       [{ type: 'idea', text: 'x' }, 'Invalid type'],
       [{ text: 'x' }, 'Invalid type'],
       [{ type: 'event', text: '   ' }, 'Invalid text'],
       [{ type: 'event' }, 'Invalid text'],
       [{ type: 'event', text: 42 }, 'Invalid text'],
-      [{ type: 'event', text: 'two\nlines' }, 'Invalid text'],
       [{ type: 'event', text: 'x'.repeat(501) }, 'Invalid text'],
     ])('rejects %j with 400', async (body, error) => {
       const res = await request(app).post('/api/reviews/2026/11/notes').send(body)
@@ -170,6 +182,13 @@ describe('reviews routes', () => {
       expect(res.status).toBe(400)
       expect(res.body).toEqual({ error: 'Invalid id' })
       expect(updateNote).not.toHaveBeenCalled()
+    })
+
+    it('updates text with line breaks', async () => {
+      vi.mocked(updateNote).mockResolvedValue({ year: 2026, month: 11, note } as never)
+      const res = await request(app).patch(url).send({ text: 'a\nb' })
+      expect(res.status).toBe(200)
+      expect(updateNote).toHaveBeenCalledWith(2026, 11, 'n1', { text: 'a\nb' })
     })
 
     it.each([
