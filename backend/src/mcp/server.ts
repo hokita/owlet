@@ -3,8 +3,8 @@ import { McpServer, createMcpHandler } from '@modelcontextprotocol/server'
 import type { CallToolResult } from '@modelcontextprotocol/server'
 import { toNodeHandler } from '@modelcontextprotocol/node'
 import { z } from 'zod'
-import { NOTE_TYPES, addNote, deleteNote, listNotes } from '../services/reviews'
-import { parseNoteId, parseNoteInput, parseYearMonth } from '../services/noteInput'
+import { NOTE_TYPES, addNote, deleteNote, listNotes, updateNote } from '../services/reviews'
+import { parseNoteId, parseNoteInput, parseNoteUpdate, parseYearMonth } from '../services/noteInput'
 import type { RateLimiter } from '../middleware/rateLimit'
 
 const MONTH_ERROR = 'Invalid month: year must be 2000–2100 and month 1–12'
@@ -89,6 +89,40 @@ export function createOwletMcpServer({ limiter }: { limiter: RateLimiter }): Mcp
         source: 'api',
       })
       return text(JSON.stringify(note))
+    })
+  )
+
+  server.registerTool(
+    'update_note',
+    {
+      description:
+        "Change a note's text, type or month in owlet. Give only the fields to change; moveTo moves the note to another month.",
+      inputSchema: z.object({
+        ...yearMonth,
+        id: z.string().describe('The note id from list_notes'),
+        type: z
+          .enum(NOTE_TYPES)
+          .optional()
+          .describe('event: something that happened; learn: something learned; next: a next step'),
+        text: z.string().optional().describe('One line, 1–500 characters'),
+        moveTo: z.object(yearMonth).optional().describe('Month to move the note to'),
+      }),
+      annotations: { destructiveHint: true, idempotentHint: false },
+    },
+    limited(limiter, 'Failed to update note', async (args) => {
+      const ym = parseYearMonth(args.year, args.month)
+      if (!ym) return toolError(MONTH_ERROR)
+      const id = parseNoteId(args.id)
+      if (!id) return toolError('Invalid id')
+      const parsed = parseNoteUpdate(args)
+      if (!parsed.ok) {
+        if (parsed.error === 'Invalid month') return toolError(MONTH_ERROR)
+        if (parsed.error === 'Nothing to update') return toolError(parsed.error)
+        return toolError(ERRORS[parsed.error])
+      }
+      const updated = await updateNote(ym.year, ym.month, id, parsed.update)
+      if (!updated) return toolError('Note not found')
+      return text(JSON.stringify(updated))
     })
   )
 

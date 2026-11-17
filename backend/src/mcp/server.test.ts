@@ -9,9 +9,10 @@ vi.mock('../services/reviews', () => ({
   listNotes: vi.fn(),
   addNote: vi.fn(),
   deleteNote: vi.fn(),
+  updateNote: vi.fn(),
 }))
 
-import { addNote, deleteNote, listNotes } from '../services/reviews'
+import { addNote, deleteNote, listNotes, updateNote } from '../services/reviews'
 import { createRateLimiter } from '../middleware/rateLimit'
 import type { RateLimiter } from '../middleware/rateLimit'
 import { createMcpRequestHandler } from './server'
@@ -64,11 +65,17 @@ function textOf(result: Awaited<ReturnType<Client['callTool']>>): string {
 }
 
 describe('owlet MCP server', () => {
-  it('lists the three tools with their annotations', async () => {
+  it('lists the four tools with their annotations', async () => {
     const { tools } = await (await connect()).listTools()
-    expect(tools.map((t) => t.name).sort()).toEqual(['add_note', 'delete_note', 'list_notes'])
+    expect(tools.map((t) => t.name).sort()).toEqual([
+      'add_note',
+      'delete_note',
+      'list_notes',
+      'update_note',
+    ])
     const byName = Object.fromEntries(tools.map((t) => [t.name, t]))
     expect(byName.delete_note.annotations?.destructiveHint).toBe(true)
+    expect(byName.update_note.annotations?.destructiveHint).toBe(true)
     expect(byName.list_notes.annotations?.readOnlyHint).toBe(true)
     const typeSchema = (
       byName.add_note.inputSchema.properties as Record<string, { enum?: string[] }>
@@ -145,6 +152,76 @@ describe('owlet MCP server', () => {
     expect(deleteNote).not.toHaveBeenCalled()
   })
 
+  describe('update_note', () => {
+    const call = async (args: Record<string, unknown>) =>
+      (await connect()).callTool({ name: 'update_note', arguments: args })
+
+    it('updates the note and returns where it lives', async () => {
+      vi.mocked(updateNote).mockResolvedValue({ year: 2026, month: 11, note } as never)
+      const result = await call({ year: 2026, month: 11, id: 'n1', text: ' Fixed ' })
+      expect(result.isError).toBeFalsy()
+      expect(updateNote).toHaveBeenCalledWith(2026, 11, 'n1', { text: 'Fixed' })
+      expect(JSON.parse(textOf(result))).toEqual({ year: 2026, month: 11, note })
+    })
+
+    it('moves a note', async () => {
+      vi.mocked(updateNote).mockResolvedValue({ year: 2026, month: 12, note } as never)
+      const result = await call({
+        year: 2026,
+        month: 11,
+        id: 'n1',
+        moveTo: { year: 2026, month: 12 },
+      })
+      expect(result.isError).toBeFalsy()
+      expect(updateNote).toHaveBeenCalledWith(2026, 11, 'n1', {
+        moveTo: { year: 2026, month: 12 },
+      })
+    })
+
+    it('ignores source', async () => {
+      vi.mocked(updateNote).mockResolvedValue({ year: 2026, month: 11, note } as never)
+      const result = await call({ year: 2026, month: 11, id: 'n1', text: 'x', source: 'app' })
+      expect(result.isError).toBeFalsy()
+      expect(updateNote).toHaveBeenCalledWith(2026, 11, 'n1', { text: 'x' })
+    })
+
+    it('reports a missing note', async () => {
+      vi.mocked(updateNote).mockResolvedValue(null)
+      const result = await call({ year: 2026, month: 11, id: 'n1', text: 'x' })
+      expect(result.isError).toBe(true)
+      expect(textOf(result)).toBe('Note not found')
+    })
+
+    it.each([
+      [{ year: 2026, month: 11, id: 'n1', text: '' }, TEXT],
+      [{ year: 2026, month: 11, id: 'n1', moveTo: { year: 1999, month: 1 } }, MONTH],
+      [{ year: 2026, month: 13, id: 'n1', text: 'x' }, MONTH],
+      [{ year: 2026, month: 11, id: 'n1' }, 'Nothing to update'],
+      [{ year: 2026, month: 11, id: 'a/b', text: 'x' }, 'Invalid id'],
+    ])('validates like add_note: %j', async (args, message) => {
+      const result = await call(args)
+      expect(result.isError).toBe(true)
+      expect(textOf(result)).toBe(message)
+      expect(updateNote).not.toHaveBeenCalled()
+    })
+
+    it('counts against the rate limit', async () => {
+      limiter = createRateLimiter({ limit: 1, windowMs: 3_600_000 })
+      vi.mocked(updateNote).mockResolvedValue({ year: 2026, month: 11, note } as never)
+      const client = await connect()
+      const run = () =>
+        client.callTool({
+          name: 'update_note',
+          arguments: { year: 2026, month: 11, id: 'n1', text: 'x' },
+        })
+      expect((await run()).isError).toBeFalsy()
+      const limited = await run()
+      expect(limited.isError).toBe(true)
+      expect(textOf(limited)).toMatch(/^Rate limit reached/)
+      expect(updateNote).toHaveBeenCalledTimes(1)
+    })
+  })
+
   it('rejects an unknown note type as a tool error', async () => {
     const result = await (
       await connect()
@@ -202,6 +279,6 @@ describe('owlet MCP server', () => {
   it('answers the 2026-07-28 revision too', async () => {
     const client = await connect({ versionNegotiation: { mode: 'auto' } })
     const { tools } = await client.listTools()
-    expect(tools).toHaveLength(3)
+    expect(tools).toHaveLength(4)
   })
 })
