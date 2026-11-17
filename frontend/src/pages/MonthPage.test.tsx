@@ -676,11 +676,13 @@ describe('MonthPage', () => {
       const review = deferReview()
       pull(200)
       await review.resolve([{ ...trip, text: 'Trip (Muse)' }, firestore, run])
-      mockApi.updateNote.mockResolvedValue({ ...trip, text: 'Trip (Muse)', type: 'learn' })
+      const update = deferUpdate()
       fireEvent.click(screen.getByRole('button', { name: 'learn' }))
       save()
 
       expect(mockApi.updateNote).toHaveBeenCalledWith(november, 'n1', { type: 'learn' })
+      expect(within(section('Learns')).getByText('Trip (Muse)')).toBeInTheDocument()
+      await update.resolve({ ...trip, text: 'Trip (Muse)', type: 'learn' })
       expect(within(section('Learns')).getByText('Trip (Muse)')).toBeInTheDocument()
     })
 

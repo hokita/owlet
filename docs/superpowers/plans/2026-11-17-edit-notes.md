@@ -39,14 +39,25 @@
 ### Task 1: Update validation — `parseNoteUpdate`
 
 **Files:**
+
 - Modify: `backend/src/services/noteInput.ts`
 - Test: `backend/src/services/noteInput.test.ts`
 
 **Interfaces:**
+
 - Produces, from `noteInput.ts`:
+
   ```ts
-  export interface NoteUpdate { type?: NoteType; text?: string; moveTo?: { year: number; month: number } }
-  export function parseNoteUpdate(input: { type?: unknown; text?: unknown; moveTo?: unknown }):
+  export interface NoteUpdate {
+    type?: NoteType
+    text?: string
+    moveTo?: { year: number; month: number }
+  }
+  export function parseNoteUpdate(input: {
+    type?: unknown
+    text?: unknown
+    moveTo?: unknown
+  }):
     | { ok: true; update: NoteUpdate }
     | { ok: false; error: 'Invalid type' | 'Invalid text' | 'Invalid month' | 'Nothing to update' }
   ```
@@ -70,16 +81,24 @@
 ### Task 2: Service — `updateNote`
 
 **Files:**
+
 - Modify: `backend/src/services/reviews.ts`
 - Test: `backend/src/services/reviews.test.ts` (extend the firestore mock with `runTransaction`)
 
 **Interfaces:**
+
 - Consumes: `NoteUpdate` (Task 1).
 - Produces, from `reviews.ts`:
+
   ```ts
-  export async function updateNote(year: number, month: number, id: string, update: NoteUpdate):
-    Promise<{ year: number; month: number; note: Note } | null>   // null = not found
+  export async function updateNote(
+    year: number,
+    month: number,
+    id: string,
+    update: NoteUpdate
+  ): Promise<{ year: number; month: number; note: Note } | null> // null = not found
   ```
+
   The returned `year`/`month` is where the note now lives.
 
 - [ ] **Step 1: Write the failing tests** — mock `getFirestore().runTransaction(fn)` calling `fn(tx)` with `tx = { get, update, delete, set, create }` spies; `tx.get` resolves `{ exists, data: () => stored }` per path. Stored note in `reviews/2026-11/notes/n1`: `{ type: 'event', text: 'Trip', source: 'api', createdAt: now }`.
@@ -101,10 +120,12 @@
 ### Task 3: REST — `PATCH /api/reviews/:year/:month/notes/:id`
 
 **Files:**
+
 - Modify: `backend/src/routes/reviews.ts`
 - Test: `backend/src/routes/reviews.test.ts` (add `updateNote: vi.fn()` to the mock)
 
 **Interfaces:**
+
 - Consumes: `parseNoteUpdate` (Task 1), `parseNoteId`, `updateNote` (Task 2).
 - Produces: `PATCH /api/reviews/:year/:month/notes/:id`, body `{ type?, text?, moveTo?: { year, month } }` → 200 with the `Note` JSON.
 
@@ -129,10 +150,12 @@
 ### Task 4: MCP — `update_note`
 
 **Files:**
+
 - Modify: `backend/src/mcp/server.ts`
 - Test: `backend/src/mcp/server.test.ts` (add `updateNote: vi.fn()` to the mock)
 
 **Interfaces:**
+
 - Consumes: `parseNoteUpdate`, `parseNoteId`, `updateNote`.
 - Produces: tool `update_note`, input `{ year, month, id: string, type?: enum, text?: string, moveTo?: { year, month } }`, annotations `{ destructiveHint: true, idempotentHint: false }`, wrapped in `limited(limiter, 'Failed to update note', …)`. Success text: `JSON.stringify({ year, month, note })` from `updateNote`.
 
@@ -156,10 +179,12 @@
 ### Task 5: Frontend API and month helpers
 
 **Files:**
+
 - Modify: `frontend/src/api.ts`, `frontend/src/month.ts`
 - Test: `frontend/src/api.test.ts`, `frontend/src/month.test.ts`
 
 **Interfaces:**
+
 - Produces, from `api.ts`: `export interface NoteUpdate { type?: NoteType; text?: string; moveTo?: YearMonth }` and `api.updateNote(ym: YearMonth, id: string, update: NoteUpdate): Promise<Note>`; failures throw an `Error` whose message is `API error: <status>` (404 → `API error: 404`, as today).
 - Produces, from `month.ts`: `toMonthInput(ym: YearMonth): string` (`'2001-09'`), `parseMonthInput(value: string): YearMonth | null` (range-checked like `parseMonthPath`, `''` → `null`), `formatShortMonth(ym: YearMonth): string` (`'Sep 2001'`), and `MONTH_INPUT_MIN = '2000-01'`, `MONTH_INPUT_MAX = '2100-12'`.
 
@@ -179,10 +204,12 @@
 ### Task 6: Refresh merge keeps local edits
 
 **Files:**
+
 - Modify: `frontend/src/notes.ts`
 - Test: `frontend/src/notes.test.ts`
 
 **Interfaces:**
+
 - Produces: `applyRefresh(current, server, local: { added: ReadonlySet<string>; deleted: ReadonlySet<string>; edited: ReadonlySet<string> })` — for an id in `edited` that is on screen, the current copy wins; `deleted` still wins over everything. Also `replaceNote(notes: Note[], note: Note): Note[]` — replaces by id, **never adds** a missing note.
 
 - [ ] **Step 1: Write the failing tests** (update `none` to include `edited: new Set()`)
@@ -203,10 +230,12 @@
 ### Task 7: `NoteRow` — tap to edit, never after a swipe
 
 **Files:**
+
 - Modify: `frontend/src/components/NoteRow.tsx`
 - Test: `frontend/src/components/NoteRow.test.tsx`
 
 **Interfaces:**
+
 - Produces: `NoteRowProps = { note: Note; onDelete: () => void; onEdit: () => void; editing: boolean; editDisabled: boolean }`. The note text renders inside `<button type="button" aria-label={`Edit "${note.text}"`}>` (full width, left aligned, `wrap-anywhere` kept). `editing` sets `aria-current="true"` on the `<li>` and a highlight background (`bg-blue-50`) on the content. `editDisabled` disables the edit button.
 
 - [ ] **Step 1: Write the failing tests**
@@ -230,10 +259,12 @@
 ### Task 8: `Composer` edit mode
 
 **Files:**
+
 - Modify: `frontend/src/components/Composer.tsx`
 - Test: `frontend/src/components/Composer.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `toMonthInput`, `parseMonthInput`, `MONTH_INPUT_MIN/MAX` (Task 5).
 - Produces: `ComposerProps = { onAdd; editing: Note | null; month: YearMonth; onSave: (input: { type: NoteType; text: string; month: YearMonth }) => void; onCancel: () => void }`. `text` is trimmed. Edit mode is driven by `editing?.id`.
 
@@ -259,10 +290,12 @@
 ### Task 9: `MonthPage` wiring
 
 **Files:**
+
 - Modify: `frontend/src/pages/MonthPage.tsx`
 - Test: `frontend/src/pages/MonthPage.test.tsx` (add `updateNote: vi.fn()` to `mockApi`)
 
 **Interfaces:**
+
 - Consumes: everything above. New state/refs in `MonthPage`: `editing: Note | null`; `notice: string | null` (auto-cleared after `UNDO_MS`); `savingEdits = useRef(new Map<string, { previous: Note; moving: boolean }>())`; `localChanges` gains `edited: Set<string>`.
 - Behaviour of `handleSave({ type, text, month: target })`:
   1. Unchanged (same text, type, month) → just `setEditing(null)`, no request.
@@ -308,16 +341,18 @@
 ### Task 10: End-to-end tests and the one full run
 
 **Files:**
+
 - Modify: `e2e/fixtures/mcp.ts`
 - Create: `e2e/tests/edit.spec.ts`
 
 **Interfaces:**
+
 - Produces, from `e2e/fixtures/mcp.ts`: `callMcpTool(request, name: string, args: Record<string, unknown>): Promise<string>` (raw body, asserts 200; `addNoteOverMcp` now uses it, unchanged signature) and `parseToolText(body: string): string` (the first content `text` of the JSON-RPC result, whether the body is JSON or an SSE `data:` line).
 
 - [ ] **Step 1: Write the tests** in `edit.spec.ts` (unique texts with `run = Date.now()`; months not used by other specs):
   - `edits a note's text and type in the app`: `/2001/8`, add `edit ${run}` as event, click `Edit "edit ${run}"`, fill `Edit note` with `edited ${run}`, click `learn`, press Enter → Learns region contains `edited ${run}`; `page.reload()` → still there, `edit ${run}` gone.
   - `moves a note to another month`: `/2001/10`, add `move ${run}`, edit it, fill `Month` with `2001-11`, Save → `status` contains `Saved and moved to Nov 2001`, row gone; `goto('/2001/11')` → `move ${run}` visible; reload `/2001/10` → absent.
-  - On a touch phone (`hasTouch`, `isMobile`, 390×844): `Muse update_note shows after pulling to refresh, with the agent badge`: `addNoteOverMcp` in `2001/12` (`muse edit ${run}`), read its id with `parseToolText`; sign in, `goto('/2001/12')`, see it; `callMcpTool(request, 'update_note', { year: 2001, month: 12, id, text: \`muse edited ${run}\`, source: 'app' })` → body has no `"isError":true`; pull with CDP touch events as in `refresh.spec.ts` → row `muse edited ${run}` has `img` `Added by an agent`.
+  - On a touch phone (`hasTouch`, `isMobile`, 390×844): `Muse update_note shows after pulling to refresh, with the agent badge`: `addNoteOverMcp` in `2001/12` (`muse edit ${run}`), read its id with `parseToolText`; sign in, `goto('/2001/12')`, see it; `callMcpTool(request, 'update_note', { year: 2001, month: 12, id, text: \`muse edited ${run}\`, source: 'app' })`→ body has no`"isError":true`; pull with CDP touch events as in `refresh.spec.ts`→ row`muse edited ${run}`has`img` `Added by an agent`.
 
 - [ ] **Step 2: Run the backend and frontend suites** — `(cd backend && npm test) && (cd frontend && npm test)` → PASS.
 
