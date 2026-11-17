@@ -649,6 +649,53 @@ describe('MonthPage', () => {
       expect(screen.queryByText('Trip!')).not.toBeInTheDocument()
     })
 
+    it('a save of a deleted note clears its Undo so it cannot come back', async () => {
+      await renderLoaded()
+      const update = deferUpdate()
+      openEdit('Trip')
+      setText('Trip!')
+      save()
+      vi.useFakeTimers()
+      fireEvent.click(screen.getByRole('button', { name: 'Delete "Trip!"' }))
+      expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument()
+
+      await update.reject('API error: 404')
+      expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('status')).not.toBeInTheDocument()
+      expect(screen.queryByText('Trip!')).not.toBeInTheDocument()
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Could not save: the note no longer exists'
+      )
+      await act(async () => vi.advanceTimersByTime(6000))
+      expect(mockApi.deleteNote).not.toHaveBeenCalled()
+    })
+
+    it('saving after a refresh sends only the fields the user changed', async () => {
+      await renderLoaded()
+      openEdit('Trip')
+      const review = deferReview()
+      pull(200)
+      await review.resolve([{ ...trip, text: 'Trip (Muse)' }, firestore, run])
+      mockApi.updateNote.mockResolvedValue({ ...trip, text: 'Trip (Muse)', type: 'learn' })
+      fireEvent.click(screen.getByRole('button', { name: 'learn' }))
+      save()
+
+      expect(mockApi.updateNote).toHaveBeenCalledWith(november, 'n1', { type: 'learn' })
+      expect(within(section('Learns')).getByText('Trip (Muse)')).toBeInTheDocument()
+    })
+
+    it('saving with nothing changed after a refresh sends nothing', async () => {
+      await renderLoaded()
+      openEdit('Trip')
+      const review = deferReview()
+      pull(200)
+      await review.resolve([{ ...trip, text: 'Trip (Muse)' }, firestore, run])
+      save()
+
+      expect(mockApi.updateNote).not.toHaveBeenCalled()
+      expect(screen.getByText('Trip (Muse)')).toBeInTheDocument()
+    })
+
     it('the agent badge stays after an edit', async () => {
       await renderLoaded([trip, muse])
       const update = deferUpdate()

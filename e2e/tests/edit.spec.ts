@@ -40,7 +40,7 @@ test('moves a note to another month', async ({ page }) => {
   await expect(page.getByText(`move ${run}`)).toBeVisible()
 
   await page.getByRole('button', { name: `Edit "move ${run}"` }).click()
-  await page.getByLabel('Month').fill('2001-11')
+  await page.getByLabel('Month', { exact: true }).fill('2001-11')
   await page.getByRole('button', { name: 'Save' }).click()
   await expect(page.getByRole('status')).toContainText('Saved and moved to Nov 2001')
   await expect(page.getByText(`move ${run}`)).toHaveCount(0)

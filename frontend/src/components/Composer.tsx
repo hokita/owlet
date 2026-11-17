@@ -140,7 +140,7 @@ export default function Composer({ onAdd, editing, month, onSave, onCancel }: Co
               max={MONTH_INPUT_MAX}
               value={editMonth}
               onChange={(e) => setEditMonth(e.target.value)}
-              className="ml-auto min-h-9 min-w-0 rounded-lg border border-gray-300 px-2 text-sm"
+              className="ml-auto min-h-9 min-w-0 rounded-lg border border-gray-300 px-2 text-base"
             />
           )}
         </div>

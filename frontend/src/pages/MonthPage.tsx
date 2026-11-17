@@ -200,8 +200,11 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
     const id = previous.id
     const moving = input.month.year !== month.year || input.month.month !== month.month
     const update: NoteUpdate = {}
-    if (input.type !== previous.type) update.type = input.type
-    if (input.text !== previous.text) update.text = input.text
+    // The user's changes are measured against the copy the Composer opened with:
+    // a refresh may have replaced `previous` with a newer one from Muse, and
+    // fields the user left alone must not undo it.
+    if (input.type !== editing.type) update.type = input.type
+    if (input.text !== editing.text) update.text = input.text
     if (moving) update.moveTo = input.month
     setEditing(null)
     if (Object.keys(update).length === 0) return
@@ -211,7 +214,7 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
       setNotes((prev) => prev.filter((n) => n.id !== id))
     } else {
       localChanges.current?.edited.add(id)
-      setNotes((prev) => replaceNote(prev, { ...previous, type: input.type, text: input.text }))
+      setNotes((prev) => replaceNote(prev, { ...previous, ...update }))
     }
     setSaving(id, { previous, moving })
 
@@ -232,6 +235,12 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
         if (e.message === 'API error: 404') {
           localChanges.current?.deleted.add(id)
           setNotes((prev) => prev.filter((n) => n.id !== id))
+          // Undo must not bring back a row the server no longer has.
+          if (pending.current?.note.id === id) {
+            clearTimeout(pending.current.timer)
+            pending.current = null
+            setPendingNote(null)
+          }
           setError('Could not save: the note no longer exists')
           return
         }

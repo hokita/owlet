@@ -65,7 +65,7 @@ pending delete with Undo, and `refresh()`, whose `applyRefresh` only knows local
    read-then-batch could resurrect a note deleted in between.
 2. **Partial updates.** `type`, `text` and `moveTo: { year, month }` are each optional; at least one is
    required ("Nothing to update" otherwise). A field that is present is validated like `add_note`.
-   Muse can fix one field without resending the rest; the app always sends `type` and `text`.
+   Muse can fix one field without resending the rest; the app sends only the fields the user changed (and `moveTo` only for another month).
 3. **API shape.** REST: `PATCH /api/reviews/:year/:month/notes/:id`, body `{ type?, text?, moveTo? }`,
    200 with the note. MCP: `update_note { year, month, id, type?, text?, moveTo? }`, returns
    `{ year, month, note }` for the month the note is now in. Errors reuse the existing messages plus
