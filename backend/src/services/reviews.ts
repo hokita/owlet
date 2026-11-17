@@ -80,7 +80,8 @@ export async function updateNote(
     const stored = snap.data() as FirebaseFirestore.DocumentData
 
     if (!moveTo) {
-      tx.update(noteRef, fields)
+      // Firestore rejects an empty update, so a no-op edit writes nothing.
+      if (Object.keys(fields).length > 0) tx.update(noteRef, fields)
       return { year, month, note: toNote(id, { ...stored, ...fields }) }
     }
 

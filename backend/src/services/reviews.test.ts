@@ -199,6 +199,26 @@ describe('updateNote', () => {
     expect(tx.create).not.toHaveBeenCalled()
   })
 
+  it('a same-month move with nothing else writes nothing', async () => {
+    const result = await updateNote(2026, 11, 'n1', { moveTo: { year: 2026, month: 11 } })
+
+    expect(tx.update).not.toHaveBeenCalled()
+    expect(tx.delete).not.toHaveBeenCalled()
+    expect(tx.set).not.toHaveBeenCalled()
+    expect(tx.create).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      year: 2026,
+      month: 11,
+      note: {
+        id: 'n1',
+        type: 'event',
+        text: 'Trip',
+        source: 'api',
+        createdAt: '2026-11-14T01:02:03.000Z',
+      },
+    })
+  })
+
   it('returns null and writes nothing when the note does not exist', async () => {
     stubStored(null)
 
