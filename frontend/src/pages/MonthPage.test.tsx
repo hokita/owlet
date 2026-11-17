@@ -867,6 +867,33 @@ describe('MonthPage', () => {
       expect(within(section('Events')).getByText('Trip')).toBeInTheDocument()
     })
 
+    it('a failed delete sent during a failed save restores the last saved copy', async () => {
+      await renderLoaded()
+      const update = deferUpdate()
+      let failDelete: () => Promise<void> = async () => {}
+      mockApi.deleteNote.mockReturnValue(
+        new Promise<void>((_, reject) => {
+          failDelete = () => act(async () => reject(new Error('API error: 500')))
+        })
+      )
+      openEdit('Trip')
+      setText('Trip!')
+      fireEvent.click(screen.getByRole('button', { name: 'learn' }))
+      save()
+      vi.useFakeTimers()
+      fireEvent.click(screen.getByRole('button', { name: 'Delete "Trip!"' }))
+      await act(async () => vi.advanceTimersByTime(5000))
+      expect(mockApi.deleteNote).toHaveBeenCalledWith(november, 'n1')
+
+      await update.reject('API error: 500')
+      expect(screen.queryByText('Trip')).not.toBeInTheDocument()
+      await failDelete()
+
+      expect(within(section('Events')).getByText('Trip')).toBeInTheDocument()
+      expect(screen.queryByText('Trip!')).not.toBeInTheDocument()
+      expect(screen.getByRole('alert')).toHaveTextContent('Could not delete: API error: 500')
+    })
+
     it("a note can't be edited again while its save is in flight", async () => {
       await renderLoaded()
       const update = deferUpdate()

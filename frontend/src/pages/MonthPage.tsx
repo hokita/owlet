@@ -50,8 +50,9 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
   const [error, setError] = useState<string | null>(null)
   const [pendingNote, setPendingNote] = useState<Note | null>(null)
   const pending = useRef<{ note: Note; timer: ReturnType<typeof setTimeout> } | null>(null)
-  // Ids whose delete has been sent but not answered yet.
-  const sendingDeletes = useRef(new Set<string>())
+  // Deletes sent but not answered yet, by id. A save that answers first
+  // updates `note`, so a failed delete brings back what the server has.
+  const sendingDeletes = useRef(new Map<string, { note: Note }>())
   // The note open in the Composer.
   const [editing, setEditing] = useState<Note | null>(null)
   // Saves sent but not answered yet, by id: the copy to restore on failure, and
@@ -88,7 +89,7 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
     pending.current = null
     setPendingNote(null)
     const id = current.note.id
-    sendingDeletes.current.add(id)
+    sendingDeletes.current.set(id, current)
     return api
       .deleteNote(month, id)
       .catch((e: Error) => {
@@ -132,7 +133,7 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
     lastLoadStartedAt.current = Date.now()
     // A note waiting for its Undo, or whose delete is still being sent, counts
     // as deleted here: the server may answer before the delete lands.
-    const deleted = new Set(sendingDeletes.current)
+    const deleted = new Set(sendingDeletes.current.keys())
     if (pending.current) deleted.add(pending.current.note.id)
     // Likewise a save still being sent: an edit keeps the copy on screen, and a
     // move counts as deleted from this month.
@@ -191,6 +192,12 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
     setSavingIds(new Set(savingEdits.current.keys()))
   }
 
+  // The copy a delete of this note will restore if it fails: the one waiting
+  // for Undo, or the one already being sent.
+  function deletingCopy(id: string): { note: Note } | undefined {
+    return pending.current?.note.id === id ? pending.current : sendingDeletes.current.get(id)
+  }
+
   // Shows the change at once and sends it behind; a failure puts the previous
   // copy back. A note being deleted (waiting for Undo) gets the result in the
   // copy Undo holds instead, so the save never re-adds its row.
@@ -226,7 +233,8 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
           showNotice(`Saved and moved to ${formatShortMonth(input.month)}`)
         } else {
           setNotes((prev) => replaceNote(prev, saved))
-          if (pending.current?.note.id === id) pending.current.note = saved
+          const deleting = deletingCopy(id)
+          if (deleting) deleting.note = saved
         }
         setError(null)
       })
@@ -244,8 +252,9 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
           setError('Could not save: the note no longer exists')
           return
         }
-        if (pending.current?.note.id === id) {
-          pending.current.note = previous
+        const deleting = deletingCopy(id)
+        if (deleting) {
+          deleting.note = previous
         } else if (moving) {
           localChanges.current?.deleted.delete(id)
           setNotes((prev) => mergeNotes(prev, [previous]))
