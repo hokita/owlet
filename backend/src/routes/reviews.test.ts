@@ -8,9 +8,10 @@ vi.mock('../services/reviews', () => ({
   listNotes: vi.fn(),
   addNote: vi.fn(),
   deleteNote: vi.fn(),
+  updateNote: vi.fn(),
 }))
 
-import { addNote, deleteNote, listNotes } from '../services/reviews'
+import { addNote, deleteNote, listNotes, updateNote } from '../services/reviews'
 import { createReviewsRouter } from './reviews'
 
 const pass: RequestHandler = (_req, _res, next) => next()
@@ -39,6 +40,9 @@ describe('reviews routes', () => {
       error: 'userAuth',
     })
     expect((await request(guarded).post('/api/reviews/2026/11/notes')).body).toEqual({
+      error: 'userAuth',
+    })
+    expect((await request(guarded).patch('/api/reviews/2026/11/notes/n1')).body).toEqual({
       error: 'userAuth',
     })
   })
@@ -117,6 +121,75 @@ describe('reviews routes', () => {
         .post('/api/reviews/2026/11/notes')
         .send({ type: 'event', text: 'x' })
       expect(res.status).toBe(500)
+      errSpy.mockRestore()
+    })
+  })
+
+  describe('PATCH /api/reviews/:year/:month/notes/:id', () => {
+    const url = '/api/reviews/2026/11/notes/n1'
+
+    it('updates the note and returns 200', async () => {
+      vi.mocked(updateNote).mockResolvedValue({ year: 2026, month: 11, note } as never)
+      const res = await request(app).patch(url).send({ text: ' Fixed ', type: 'learn' })
+      expect(res.status).toBe(200)
+      expect(res.body).toEqual(note)
+      expect(updateNote).toHaveBeenCalledWith(2026, 11, 'n1', { text: 'Fixed', type: 'learn' })
+    })
+
+    it('passes moveTo through', async () => {
+      vi.mocked(updateNote).mockResolvedValue({ year: 2026, month: 12, note } as never)
+      const res = await request(app)
+        .patch(url)
+        .send({ moveTo: { year: 2026, month: 12 } })
+      expect(res.status).toBe(200)
+      expect(updateNote).toHaveBeenCalledWith(2026, 11, 'n1', { moveTo: { year: 2026, month: 12 } })
+    })
+
+    it('ignores source', async () => {
+      vi.mocked(updateNote).mockResolvedValue({ year: 2026, month: 11, note } as never)
+      await request(app).patch(url).send({ text: 'a', source: 'api' })
+      expect(updateNote).toHaveBeenCalledWith(2026, 11, 'n1', { text: 'a' })
+    })
+
+    it('returns 404 when the note does not exist', async () => {
+      vi.mocked(updateNote).mockResolvedValue(null)
+      const res = await request(app).patch(url).send({ text: 'a' })
+      expect(res.status).toBe(404)
+      expect(res.body).toEqual({ error: 'Note not found' })
+    })
+
+    it('rejects an invalid month with 400', async () => {
+      const res = await request(app).patch('/api/reviews/2026/13/notes/n1').send({ text: 'a' })
+      expect(res.status).toBe(400)
+      expect(res.body).toEqual({ error: 'Invalid month' })
+      expect(updateNote).not.toHaveBeenCalled()
+    })
+
+    it('rejects an invalid id with 400', async () => {
+      const res = await request(app).patch('/api/reviews/2026/11/notes/a%2Fb').send({ text: 'a' })
+      expect(res.status).toBe(400)
+      expect(res.body).toEqual({ error: 'Invalid id' })
+      expect(updateNote).not.toHaveBeenCalled()
+    })
+
+    it.each([
+      [{}, 'Nothing to update'],
+      [{ text: '' }, 'Invalid text'],
+      [{ type: 'x' }, 'Invalid type'],
+      [{ moveTo: { year: 2026, month: 0 } }, 'Invalid month'],
+    ])('rejects %j with 400', async (body, error) => {
+      const res = await request(app).patch(url).send(body)
+      expect(res.status).toBe(400)
+      expect(res.body).toEqual({ error })
+      expect(updateNote).not.toHaveBeenCalled()
+    })
+
+    it('returns 500 when Firestore fails', async () => {
+      vi.mocked(updateNote).mockRejectedValue(new Error('boom'))
+      const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const res = await request(app).patch(url).send({ text: 'a' })
+      expect(res.status).toBe(500)
+      expect(res.body).toEqual({ error: 'Internal error' })
       errSpy.mockRestore()
     })
   })
