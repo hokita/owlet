@@ -40,9 +40,18 @@ interface ComposerProps {
   month: YearMonth
   onSave: (input: { type: NoteType; text: string; month: YearMonth }) => void
   onCancel: () => void
+  // Called with the bar's height (px, safe-area padding included) as it changes.
+  onHeightChange?: (height: number) => void
 }
 
-export default function Composer({ onAdd, editing, month, onSave, onCancel }: ComposerProps) {
+export default function Composer({
+  onAdd,
+  editing,
+  month,
+  onSave,
+  onCancel,
+  onHeightChange,
+}: ComposerProps) {
   const [type, setType] = useState<NoteType>(loadLastType)
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
@@ -53,6 +62,7 @@ export default function Composer({ onAdd, editing, month, onSave, onCancel }: Co
   const [loadedId, setLoadedId] = useState<string | null>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const editInputRef = useRef<HTMLTextAreaElement>(null)
+  const formRef = useRef<HTMLFormElement>(null)
   const keyboardInset = useKeyboardInset()
   const counterId = useId()
   useAutoGrow(inputRef, text)
@@ -68,6 +78,18 @@ export default function Composer({ onAdd, editing, month, onSave, onCancel }: Co
       setEditMonth(toMonthInput(month))
     }
   }
+
+  // The bar grows with its text, the Editing line and the counter; the page
+  // places the toast and list padding from its measured height. Without
+  // ResizeObserver the page keeps its default.
+  useEffect(() => {
+    const form = formRef.current
+    if (!form || !onHeightChange || typeof ResizeObserver === 'undefined') return
+    onHeightChange(form.offsetHeight)
+    const observer = new ResizeObserver(() => onHeightChange(form.offsetHeight))
+    observer.observe(form)
+    return () => observer.disconnect()
+  }, [onHeightChange])
 
   // Opening a note (or switching to another) puts the cursor in its text.
   useEffect(() => {
@@ -128,6 +150,7 @@ export default function Composer({ onAdd, editing, month, onSave, onCancel }: Co
 
   return (
     <form
+      ref={formRef}
       onSubmit={handleSubmit}
       onKeyDown={handleKeyDown}
       style={{ bottom: keyboardInset }}

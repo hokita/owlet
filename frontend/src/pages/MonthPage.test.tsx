@@ -14,6 +14,12 @@ const { mockKeyboardInset } = vi.hoisted(() => ({ mockKeyboardInset: vi.fn(() =>
 vi.mock('../useKeyboardInset', () => ({ useKeyboardInset: mockKeyboardInset }))
 
 import MonthPage from './MonthPage'
+import {
+  installFakeResizeObserver,
+  setFormHeight,
+  triggerResize,
+  uninstallFakeResizeObserver,
+} from '../testing/fakeResizeObserver'
 
 const november = { year: 2026, month: 11 }
 const trip = { id: 'n1', type: 'event', text: 'Trip', createdAt: '2026-11-01T00:00:00.000Z' }
@@ -83,6 +89,7 @@ describe('MonthPage', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+    uninstallFakeResizeObserver()
   })
 
   it('shows the month and its notes grouped by type', async () => {
@@ -230,6 +237,18 @@ describe('MonthPage', () => {
       expect(screen.queryByRole('status')).not.toBeInTheDocument()
     })
 
+    it('places the toast above the Composer it measured', async () => {
+      installFakeResizeObserver()
+      setFormHeight(208)
+      await renderLoaded()
+      fireEvent.click(screen.getByRole('button', { name: 'Delete "Trip"' }))
+      const toast = screen.getByRole('status')
+      expect(toast.style.getPropertyValue('--composer-height')).toBe('208px')
+      expect(toast.className).toContain(
+        'bottom-[calc(var(--composer-height)+0.5rem+var(--keyboard-inset))]'
+      )
+    })
+
     it('lifts the Undo toast above the on-screen keyboard', async () => {
       mockKeyboardInset.mockReturnValue(300)
       await renderLoaded()
@@ -275,6 +294,18 @@ describe('MonthPage', () => {
       expect(within(section('Events')).getByText('Trip')).toBeInTheDocument()
       expect(screen.getByRole('alert')).toHaveTextContent('Could not delete: API error: 500')
     })
+  })
+
+  it('pads the list so the last note can scroll above the Composer', async () => {
+    installFakeResizeObserver()
+    setFormHeight(208)
+    await renderLoaded()
+    expect(screen.getByRole('main').style.paddingBottom).toBe('calc(208px + 4rem)')
+  })
+
+  it('uses the default height before the Composer reports one', async () => {
+    await renderLoaded()
+    expect(screen.getByRole('main').style.paddingBottom).toBe('calc(112px + 4rem)')
   })
 
   it('sends a pending delete before signing out', async () => {
@@ -834,11 +865,25 @@ describe('MonthPage', () => {
     })
 
     it('lifts the toast above the taller Composer while editing', async () => {
+      installFakeResizeObserver()
+      setFormHeight(112)
       await renderLoaded()
       fireEvent.click(screen.getByRole('button', { name: 'Delete "Run"' }))
-      expect(screen.getByRole('status').className).toContain('7.5rem')
+      expect(screen.getByRole('status').style.getPropertyValue('--composer-height')).toBe('112px')
       openEdit('Trip')
-      expect(screen.getByRole('status').className).toContain('9rem')
+      setFormHeight(144)
+      triggerResize()
+      expect(screen.getByRole('status').style.getPropertyValue('--composer-height')).toBe('144px')
+    })
+
+    it('saves an old one-line note with a new line break', async () => {
+      await renderLoaded()
+      mockApi.updateNote.mockResolvedValue({ ...trip, text: 'Trip\nday 1' })
+      openEdit('Trip')
+      setText('Trip\nday 1')
+      save()
+      expect(mockApi.updateNote).toHaveBeenCalledWith(november, 'n1', { text: 'Trip\nday 1' })
+      await waitFor(() => expect(screen.queryByText('Editing')).not.toBeInTheDocument())
     })
 
     it('Undo after a save restores the saved copy', async () => {

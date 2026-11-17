@@ -1,8 +1,15 @@
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { beforeEach, describe, it, expect, vi } from 'vitest'
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
 import type { ComponentProps } from 'react'
 import Composer from './Composer'
 import type { Note } from '../notes'
+import {
+  installFakeResizeObserver,
+  observedElements,
+  setFormHeight,
+  triggerResize,
+  uninstallFakeResizeObserver,
+} from '../testing/fakeResizeObserver'
 
 const NOV_2026 = { year: 2026, month: 11 }
 const trip: Note = {
@@ -36,6 +43,10 @@ function type(text: string) {
 describe('Composer', () => {
   beforeEach(() => {
     localStorage.clear()
+  })
+
+  afterEach(() => {
+    uninstallFakeResizeObserver()
   })
 
   it('defaults to event', () => {
@@ -198,6 +209,28 @@ describe('Composer', () => {
     expect(screen.getByRole('button', { name: 'event' })).toHaveAttribute('aria-pressed', 'true')
   })
 
+  it('reports its height as it grows', () => {
+    installFakeResizeObserver()
+    setFormHeight(112)
+    const onHeightChange = vi.fn()
+    const { container, unmount } = render(composer({ onHeightChange }))
+    expect(onHeightChange).toHaveBeenLastCalledWith(112)
+    expect(observedElements()).toEqual([container.querySelector('form')])
+
+    setFormHeight(208)
+    triggerResize()
+    expect(onHeightChange).toHaveBeenLastCalledWith(208)
+
+    unmount()
+    expect(observedElements()).toEqual([])
+  })
+
+  it('renders without ResizeObserver', () => {
+    const onHeightChange = vi.fn()
+    render(composer({ onHeightChange }))
+    expect(onHeightChange).not.toHaveBeenCalled()
+  })
+
   describe('character counter', () => {
     it('shows no counter up to 400 characters', () => {
       render(composer())
@@ -211,7 +244,7 @@ describe('Composer', () => {
       const counter = screen.getByText('401/500')
       expect(screen.getByRole('textbox', { name: 'New note' })).toHaveAttribute(
         'aria-describedby',
-        counter.id,
+        counter.id
       )
     })
 
