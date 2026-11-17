@@ -60,7 +60,11 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
   const lastLoadStartedAt = useRef(0)
   // Notes added or deleted here while a refresh is in flight, so its result
   // doesn't undo them. Null when no refresh is running.
-  const localChanges = useRef<{ added: Set<string>; deleted: Set<string> } | null>(null)
+  const localChanges = useRef<{
+    added: Set<string>
+    deleted: Set<string>
+    edited: Set<string>
+  } | null>(null)
   // A refresh still running when the month changes is ignored.
   const mounted = useRef(true)
   const mainRef = useRef<HTMLElement>(null)
@@ -118,7 +122,7 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
     // as deleted here: the server may answer before the delete lands.
     const deleted = new Set(sendingDeletes.current)
     if (pending.current) deleted.add(pending.current.note.id)
-    const local = { added: new Set<string>(), deleted }
+    const local = { added: new Set<string>(), deleted, edited: new Set<string>() }
     localChanges.current = local
     setRefreshing(true)
     api

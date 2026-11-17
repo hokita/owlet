@@ -21,16 +21,27 @@ export function mergeNotes(current: Note[], incoming: Note[]): Note[] {
   return [...byId.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt))
 }
 
-// The server's list is the truth after a refresh, except for edits made here
+// The server's list is the truth after a refresh, except for changes made here
 // while it was in flight: a note added locally stays, a note deleted locally
-// stays hidden.
+// stays hidden, and a note edited locally keeps its local copy.
 export function applyRefresh(
   current: Note[],
   server: Note[],
-  local: { added: ReadonlySet<string>; deleted: ReadonlySet<string> }
+  local: {
+    added: ReadonlySet<string>
+    deleted: ReadonlySet<string>
+    edited: ReadonlySet<string>
+  }
 ): Note[] {
   return mergeNotes(
     server.filter((n) => !local.deleted.has(n.id)),
-    current.filter((n) => local.added.has(n.id))
+    current.filter(
+      (n) => !local.deleted.has(n.id) && (local.added.has(n.id) || local.edited.has(n.id))
+    )
   )
+}
+
+// Replaces a note by id, in place. A note that is not in the list is not added.
+export function replaceNote(notes: Note[], note: Note): Note[] {
+  return notes.map((n) => (n.id === note.id ? note : n))
 }
