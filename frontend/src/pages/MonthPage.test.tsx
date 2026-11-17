@@ -533,7 +533,10 @@ describe('MonthPage', () => {
       openEdit('Trip')
       expect(screen.getByText('Editing')).toBeInTheDocument()
       expect(editBox()).toHaveValue('Trip')
-      expect(screen.getByText('Trip').closest('li')).toHaveAttribute('aria-current', 'true')
+      expect(screen.getByRole('button', { name: 'Edit "Trip"' }).closest('li')).toHaveAttribute(
+        'aria-current',
+        'true'
+      )
     })
 
     it('saving a text and type change updates the row in place', async () => {

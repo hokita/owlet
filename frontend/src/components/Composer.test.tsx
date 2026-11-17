@@ -79,6 +79,61 @@ describe('Composer', () => {
     await waitFor(() => expect(screen.getByRole('textbox', { name: 'New note' })).toHaveValue(''))
   })
 
+  it('uses a textarea for new notes', () => {
+    render(composer())
+    const input = screen.getByRole('textbox', { name: 'New note' })
+    expect(input.tagName).toBe('TEXTAREA')
+    expect(input).toHaveAttribute('rows', '1')
+    expect(input).toHaveAttribute('maxlength', '500')
+    expect(input).toHaveAttribute('enterkeyhint', 'enter')
+    expect(input).toHaveAttribute('placeholder', 'Note…')
+    expect(input).toHaveClass('text-base')
+  })
+
+  it('Return inserts a line break, it does not submit', () => {
+    const onAdd = vi.fn()
+    render(composer({ onAdd }))
+    type('Trip')
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'New note' }), { key: 'Enter' })
+    expect(onAdd).not.toHaveBeenCalled()
+  })
+
+  it('submits multi-line text', async () => {
+    const onAdd = vi.fn().mockResolvedValue(undefined)
+    render(composer({ onAdd }))
+    type('  Trip\n- day 1  ')
+    fireEvent.click(screen.getByRole('button', { name: 'Add note' }))
+    expect(onAdd).toHaveBeenCalledWith({ type: 'event', text: 'Trip\n- day 1' })
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'New note' })).toHaveValue(''))
+  })
+
+  it.each(['metaKey', 'ctrlKey'])('%s+Return submits', async (modifier) => {
+    const onAdd = vi.fn().mockResolvedValue(undefined)
+    render(composer({ onAdd }))
+    type('Trip')
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'New note' }), {
+      key: 'Enter',
+      [modifier]: true,
+    })
+    expect(onAdd).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'New note' })).toHaveValue(''))
+  })
+
+  it('⌘+Return during an IME composition does not submit', () => {
+    const onAdd = vi.fn()
+    render(composer({ onAdd }))
+    type('Trip')
+    const input = screen.getByRole('textbox', { name: 'New note' })
+    fireEvent.keyDown(input, { key: 'Enter', metaKey: true, isComposing: true })
+    fireEvent.keyDown(input, { key: 'Enter', metaKey: true, keyCode: 229 })
+    expect(onAdd).not.toHaveBeenCalled()
+  })
+
+  it('Save, Cancel and ➤ stay at the bottom of the box', () => {
+    render(composer())
+    expect(screen.getByRole('textbox', { name: 'New note' }).parentElement).toHaveClass('items-end')
+  })
+
   it('ignores blank text', () => {
     const onAdd = vi.fn()
     render(composer({ onAdd }))
@@ -149,11 +204,24 @@ describe('Composer', () => {
       })
     })
 
-    it('Enter saves', () => {
+    it('⌘+Return saves', () => {
       const onSave = vi.fn()
       render(edit({ onSave }))
-      fireEvent.submit(textbox())
+      fireEvent.keyDown(textbox(), { key: 'Enter', metaKey: true })
       expect(onSave).toHaveBeenCalled()
+    })
+
+    it('Return in Edit note does not save', () => {
+      const onSave = vi.fn()
+      render(edit({ onSave }))
+      fireEvent.keyDown(textbox(), { key: 'Enter' })
+      expect(onSave).not.toHaveBeenCalled()
+    })
+
+    it("Edit note is a textarea with the note's line breaks", () => {
+      render(edit({ editing: { ...trip, text: 'a\nb' } }))
+      expect(textbox().tagName).toBe('TEXTAREA')
+      expect(textbox()).toHaveValue('a\nb')
     })
 
     it('Escape and Cancel cancel', () => {
