@@ -198,6 +198,32 @@ describe('Composer', () => {
     expect(screen.getByRole('button', { name: 'event' })).toHaveAttribute('aria-pressed', 'true')
   })
 
+  describe('character counter', () => {
+    it('shows no counter up to 400 characters', () => {
+      render(composer())
+      type('x'.repeat(400))
+      expect(screen.queryByText('400/500')).not.toBeInTheDocument()
+    })
+
+    it('shows the counter past 400, counting line breaks', () => {
+      render(composer())
+      type('x'.repeat(400) + '\n')
+      const counter = screen.getByText('401/500')
+      expect(screen.getByRole('textbox', { name: 'New note' })).toHaveAttribute(
+        'aria-describedby',
+        counter.id,
+      )
+    })
+
+    it('the counter is not a live region', () => {
+      render(composer())
+      type('x'.repeat(401))
+      const counter = screen.getByText('401/500')
+      expect(counter).not.toHaveAttribute('aria-live')
+      expect(counter).not.toHaveAttribute('role', 'status')
+    })
+  })
+
   describe('editing', () => {
     function edit(props: Partial<ComponentProps<typeof Composer>> = {}) {
       return composer({ editing: trip, ...props })
@@ -216,6 +242,12 @@ describe('Composer', () => {
       expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
       expect(screen.queryByRole('button', { name: 'Add note' })).not.toBeInTheDocument()
+    })
+
+    it('shows the counter in Edit mode', () => {
+      render(edit())
+      fireEvent.change(textbox(), { target: { value: 'y'.repeat(450) } })
+      expect(screen.getByText('450/500')).toBeInTheDocument()
     })
 
     it('Save sends the trimmed text, type and month', () => {

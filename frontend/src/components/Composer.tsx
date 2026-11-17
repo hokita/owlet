@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import type { FormEvent, KeyboardEvent } from 'react'
 import { MONTH_INPUT_MAX, MONTH_INPUT_MIN, parseMonthInput, toMonthInput } from '../month'
 import type { YearMonth } from '../month'
@@ -6,6 +6,9 @@ import { NOTE_TYPES } from '../notes'
 import type { Note, NoteType } from '../notes'
 import { useAutoGrow } from '../useAutoGrow'
 import { useKeyboardInset } from '../useKeyboardInset'
+
+const NOTE_MAX = 500
+const COUNTER_FROM = 400
 
 const LAST_TYPE_KEY = 'owlet.lastNoteType'
 
@@ -51,6 +54,7 @@ export default function Composer({ onAdd, editing, month, onSave, onCancel }: Co
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const editInputRef = useRef<HTMLTextAreaElement>(null)
   const keyboardInset = useKeyboardInset()
+  const counterId = useId()
   useAutoGrow(inputRef, text)
   useAutoGrow(editInputRef, editText)
 
@@ -115,6 +119,10 @@ export default function Composer({ onAdd, editing, month, onSave, onCancel }: Co
     }
   }
 
+  const activeLength = (editing ? editText : text).length
+  const showCounter = activeLength > COUNTER_FROM
+  const describedBy = showCounter ? counterId : undefined
+
   const activeType = editing ? editType : type
   const setActiveType = editing ? setEditType : setType
 
@@ -163,7 +171,8 @@ export default function Composer({ onAdd, editing, month, onSave, onCancel }: Co
                 rows={1}
                 aria-label="Edit note"
                 enterKeyHint="enter"
-                maxLength={500}
+                maxLength={NOTE_MAX}
+                aria-describedby={describedBy}
                 value={editText}
                 onChange={(e) => setEditText(e.target.value)}
                 onKeyDown={handleTextKeyDown}
@@ -192,7 +201,8 @@ export default function Composer({ onAdd, editing, month, onSave, onCancel }: Co
                 aria-label="New note"
                 placeholder="Note…"
                 enterKeyHint="enter"
-                maxLength={500}
+                maxLength={NOTE_MAX}
+                aria-describedby={describedBy}
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 onKeyDown={handleTextKeyDown}
@@ -209,6 +219,11 @@ export default function Composer({ onAdd, editing, month, onSave, onCancel }: Co
             </>
           )}
         </div>
+        {showCounter && (
+          <p id={counterId} className="text-right text-xs text-gray-500">
+            {activeLength}/{NOTE_MAX}
+          </p>
+        )}
       </div>
     </form>
   )
