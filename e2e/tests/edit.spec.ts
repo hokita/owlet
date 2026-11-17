@@ -13,14 +13,14 @@ test("edits a note's text and type in the app", async ({ page }) => {
   const input = page.getByRole('textbox', { name: 'New note' })
   await page.getByRole('button', { name: 'event', exact: true }).click()
   await input.fill(`edit ${run}`)
-  await input.press('Enter')
+  await page.getByRole('button', { name: 'Add note' }).click()
   await expect(page.getByText(`edit ${run}`)).toBeVisible()
 
   await page.getByRole('button', { name: `Edit "edit ${run}"` }).click()
   const editor = page.getByRole('textbox', { name: 'Edit note' })
   await editor.fill(`edited ${run}`)
   await page.getByRole('button', { name: 'learn', exact: true }).click()
-  await editor.press('Enter')
+  await page.getByRole('button', { name: 'Save' }).click()
   await expect(page.getByRole('region', { name: 'Learns' })).toContainText(`edited ${run}`)
 
   await page.reload()
@@ -36,7 +36,7 @@ test('moves a note to another month', async ({ page }) => {
   const input = page.getByRole('textbox', { name: 'New note' })
   await page.getByRole('button', { name: 'event', exact: true }).click()
   await input.fill(`move ${run}`)
-  await input.press('Enter')
+  await page.getByRole('button', { name: 'Add note' }).click()
   await expect(page.getByText(`move ${run}`)).toBeVisible()
 
   await page.getByRole('button', { name: `Edit "move ${run}"` }).click()

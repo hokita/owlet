@@ -22,7 +22,7 @@ test('adds notes of each type and deletes one', async ({ page }) => {
   for (const type of ['event', 'learn', 'next']) {
     await page.getByRole('button', { name: type, exact: true }).click()
     await input.fill(`${type} ${run}`)
-    await input.press('Enter')
+    await page.getByRole('button', { name: 'Add note' }).click()
     await expect(page.getByText(`${type} ${run}`)).toBeVisible()
   }
 
@@ -46,7 +46,7 @@ test('Undo keeps the note', async ({ page }) => {
   await page.goto('/2001/3')
   const input = page.getByRole('textbox', { name: 'New note' })
   await input.fill(`keep ${run}`)
-  await input.press('Enter')
+  await page.getByRole('button', { name: 'Add note' }).click()
   await expect(page.getByText(`keep ${run}`)).toBeVisible()
 
   await page.getByRole('button', { name: `Delete "keep ${run}"` }).click()
@@ -64,7 +64,7 @@ test.describe('at iPhone width', () => {
     const text = `https://example.com/${'a'.repeat(120)}?run=${run}`
     const input = page.getByRole('textbox', { name: 'New note' })
     await input.fill(text)
-    await input.press('Enter')
+    await page.getByRole('button', { name: 'Add note' }).click()
 
     const textEl = page.getByText(text)
     await expect(textEl).toBeVisible()
@@ -89,7 +89,7 @@ test.describe('on a touch-only phone', () => {
 
     const input = page.getByRole('textbox', { name: 'New note' })
     await input.fill(`touch ${run}`)
-    await input.press('Enter')
+    await page.getByRole('button', { name: 'Add note' }).click()
     await expect(page.getByText(`touch ${run}`)).toBeVisible()
 
     // getByRole skips display:none elements, so this is what VoiceOver sees.
