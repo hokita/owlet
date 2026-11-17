@@ -8,19 +8,29 @@ const DELETE_THRESHOLD = 100
 interface NoteRowProps {
   note: Note
   onDelete: () => void
+  onEdit: () => void
+  // This note is open in the composer.
+  editing: boolean
+  // Its edit is being saved, so it can't be opened again.
+  editDisabled: boolean
 }
 
-export default function NoteRow({ note, onDelete }: NoteRowProps) {
+export default function NoteRow({ note, onDelete, onEdit, editing, editDisabled }: NoteRowProps) {
   const [offset, setOffset] = useState(0)
   const start = useRef<{ x: number; y: number } | null>(null)
   // Decided on the first real movement: a horizontal drag swipes the row, a
   // vertical one is page scrolling and is left alone.
   const direction = useRef<'horizontal' | 'vertical' | null>(null)
+  // Set once a touch turns into a swipe or drag, so the click the browser fires
+  // after touchend doesn't also open the note. Cleared by the next touchstart,
+  // not touchend, because the click comes after it.
+  const moved = useRef(false)
 
   function handleTouchStart(e: TouchEvent) {
     const t = e.touches[0]
     start.current = { x: t.clientX, y: t.clientY }
     direction.current = null
+    moved.current = false
   }
 
   function handleTouchMove(e: TouchEvent) {
@@ -30,6 +40,7 @@ export default function NoteRow({ note, onDelete }: NoteRowProps) {
     const dy = t.clientY - start.current.y
     if (direction.current === null && Math.max(Math.abs(dx), Math.abs(dy)) > 8) {
       direction.current = Math.abs(dx) > Math.abs(dy) ? 'horizontal' : 'vertical'
+      moved.current = true
     }
     if (direction.current === 'horizontal') setOffset(Math.min(0, dx))
   }
@@ -46,8 +57,16 @@ export default function NoteRow({ note, onDelete }: NoteRowProps) {
     if (shouldDelete) onDelete()
   }
 
+  function handleEditClick() {
+    if (moved.current) return
+    onEdit()
+  }
+
   return (
-    <li className="group relative overflow-hidden border-b border-gray-100 last:border-b-0">
+    <li
+      aria-current={editing ? 'true' : undefined}
+      className="group relative overflow-hidden border-b border-gray-100 last:border-b-0"
+    >
       <div
         aria-hidden="true"
         className="absolute inset-0 flex items-center justify-end bg-red-500 px-4 text-sm font-medium text-white"
@@ -63,11 +82,19 @@ export default function NoteRow({ note, onDelete }: NoteRowProps) {
         // swipe, so it never deletes.
         onTouchCancel={resetGesture}
         style={{ transform: `translateX(${offset}px)` }}
-        className={`relative flex min-h-11 items-center gap-2 bg-white px-4 py-2 touch-pan-y ${
-          offset === 0 ? 'transition-transform duration-200' : ''
-        }`}
+        className={`relative flex min-h-11 items-center gap-2 px-4 py-2 touch-pan-y ${
+          editing ? 'bg-blue-50' : 'bg-white'
+        } ${offset === 0 ? 'transition-transform duration-200' : ''}`}
       >
-        <span className="min-w-0 flex-1 text-base wrap-anywhere">{note.text}</span>
+        <button
+          type="button"
+          onClick={handleEditClick}
+          disabled={editDisabled}
+          aria-label={`Edit "${note.text}"`}
+          className="min-w-0 flex-1 cursor-pointer rounded text-left text-base wrap-anywhere focus-visible:outline-2 focus-visible:outline-blue-500"
+        >
+          {note.text}
+        </button>
         {note.source === 'api' && (
           <span
             role="img"

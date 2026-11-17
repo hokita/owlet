@@ -286,7 +286,14 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
                   ) : (
                     <ul className="m-0 list-none overflow-hidden rounded-xl bg-white p-0 shadow-sm">
                       {items.map((note) => (
-                        <NoteRow key={note.id} note={note} onDelete={() => handleDelete(note)} />
+                        <NoteRow
+                          key={note.id}
+                          note={note}
+                          onDelete={() => handleDelete(note)}
+                          onEdit={() => {}}
+                          editing={false}
+                          editDisabled={false}
+                        />
                       ))}
                     </ul>
                   )}
