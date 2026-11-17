@@ -115,7 +115,7 @@ It uses the API token above and accepts nothing else (no Firebase sign-in); a mi
 | Tool          | Arguments                                                                              | Notes                                              |
 | ------------- | -------------------------------------------------------------------------------------- | -------------------------------------------------- |
 | `list_notes`  | `year`, `month`                                                                        | Read-only                                          |
-| `add_note`    | `year`, `month`, `type` (`event` \| `learn` \| `next`), `text` (one line, ≤ 500 chars) | Same validation as the app; saved as an agent note |
+| `add_note`    | `year`, `month`, `type` (`event` \| `learn` \| `next`), `text` (1–500 chars; line breaks allowed) | Same validation as the app; saved as an agent note |
 | `delete_note` | `year`, `month`, `id`                                                                  | Marked destructive, so the client asks first       |
 
 **Rate limit:** MCP tool calls are limited to 30 an hour. Protocol requests (`initialize`, `tools/list`) aren't counted. Over the limit, a tool call returns a tool error `Rate limit reached: try again in <N> seconds` (HTTP status stays 200).

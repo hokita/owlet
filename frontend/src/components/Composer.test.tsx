@@ -311,6 +311,14 @@ describe('Composer', () => {
       expect(onSave).not.toHaveBeenCalled()
     })
 
+    it('both note textareas keep the 44px touch target (min-h-11)', () => {
+      const { unmount } = render(edit())
+      expect(textbox()).toHaveClass('min-h-11')
+      unmount()
+      render(composer())
+      expect(screen.getByRole('textbox', { name: 'New note' })).toHaveClass('min-h-11')
+    })
+
     it("Edit note is a textarea with the note's line breaks", () => {
       render(edit({ editing: { ...trip, text: 'a\nb' } }))
       expect(textbox().tagName).toBe('TEXTAREA')

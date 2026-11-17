@@ -21,7 +21,7 @@ test('adds a multi-line note and keeps its lines after a reload', async ({ page 
 
   await typeLines(page, [`Trip ${run}`, '- day 1', '', '', '', '- day 2'])
   await page.getByRole('button', { name: 'Add note' }).click()
-  await expect(page.getByRole('button', { name: /^Edit "Trip / })).toBeVisible()
+  await expect(page.getByRole('button', { name: new RegExp(`^Edit "Trip ${run}`) })).toBeVisible()
 
   await page.reload()
   const edit = page.getByRole('button', { name: new RegExp(`^Edit "Trip ${run}`) })
