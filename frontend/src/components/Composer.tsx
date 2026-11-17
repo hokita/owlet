@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FormEvent, KeyboardEvent } from 'react'
 import { MONTH_INPUT_MAX, MONTH_INPUT_MIN, parseMonthInput, toMonthInput } from '../month'
 import type { YearMonth } from '../month'
@@ -48,6 +48,7 @@ export default function Composer({ onAdd, editing, month, onSave, onCancel }: Co
   const [editMonth, setEditMonth] = useState('')
   const [loadedId, setLoadedId] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const editInputRef = useRef<HTMLInputElement>(null)
   const keyboardInset = useKeyboardInset()
 
   // Load the fields when another note (or none) is being edited.
@@ -61,6 +62,11 @@ export default function Composer({ onAdd, editing, month, onSave, onCancel }: Co
     }
   }
 
+  // Opening a note (or switching to another) puts the cursor in its text.
+  useEffect(() => {
+    if (editingId) editInputRef.current?.focus()
+  }, [editingId])
+
   const editedMonth = parseMonthInput(editMonth)
   const canSave = editText.trim() !== '' && editedMonth !== null
 
@@ -70,7 +76,8 @@ export default function Composer({ onAdd, editing, month, onSave, onCancel }: Co
   }
 
   function handleKeyDown(e: KeyboardEvent) {
-    if (editing && e.key === 'Escape') onCancel()
+    // While an IME is composing, Escape cancels the conversion, not the edit.
+    if (editing && e.key === 'Escape' && !e.nativeEvent.isComposing) onCancel()
   }
 
   async function handleSubmit(e?: FormEvent) {
@@ -141,6 +148,7 @@ export default function Composer({ onAdd, editing, month, onSave, onCancel }: Co
           {editing ? (
             <>
               <input
+                ref={editInputRef}
                 type="text"
                 aria-label="Edit note"
                 enterKeyHint="done"

@@ -70,12 +70,13 @@ describe('Composer', () => {
     expect(screen.getByRole('textbox', { name: 'New note' })).toHaveValue('Next thought')
   })
 
-  it('submits on Enter', () => {
+  it('submits on Enter', async () => {
     const onAdd = vi.fn().mockResolvedValue(undefined)
     render(composer({ onAdd }))
     type('Trip')
     fireEvent.submit(screen.getByRole('textbox', { name: 'New note' }))
     expect(onAdd).toHaveBeenCalledWith({ type: 'event', text: 'Trip' })
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'New note' })).toHaveValue(''))
   })
 
   it('ignores blank text', () => {
@@ -164,6 +165,23 @@ describe('Composer', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
       expect(onCancel).toHaveBeenCalledTimes(2)
       expect(onSave).not.toHaveBeenCalled()
+    })
+
+    it('Escape during an IME composition does not cancel', () => {
+      const onCancel = vi.fn()
+      render(edit({ onCancel }))
+      fireEvent.keyDown(textbox(), { key: 'Escape', isComposing: true })
+      expect(onCancel).not.toHaveBeenCalled()
+      expect(textbox()).toBeInTheDocument()
+    })
+
+    it('focuses the text when editing starts or switches note', () => {
+      const { rerender } = render(composer())
+      rerender(edit())
+      expect(textbox()).toHaveFocus()
+      screen.getByRole('button', { name: 'Cancel' }).focus()
+      rerender(edit({ editing: run }))
+      expect(textbox()).toHaveFocus()
     })
 
     it("can't save empty text or a cleared month", () => {
