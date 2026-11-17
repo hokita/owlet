@@ -3,9 +3,10 @@ import type { CSSProperties } from 'react'
 import { signOut } from 'firebase/auth'
 import { auth } from '../firebase'
 import { api } from '../api'
-import { formatMonth, shiftMonth } from '../month'
+import type { NoteUpdate } from '../api'
+import { formatMonth, formatShortMonth, shiftMonth } from '../month'
 import type { YearMonth } from '../month'
-import { applyRefresh, mergeNotes } from '../notes'
+import { applyRefresh, mergeNotes, replaceNote } from '../notes'
 import type { Note, NoteType } from '../notes'
 import Composer from '../components/Composer'
 import NoteRow from '../components/NoteRow'
@@ -51,6 +52,16 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
   const pending = useRef<{ note: Note; timer: ReturnType<typeof setTimeout> } | null>(null)
   // Ids whose delete has been sent but not answered yet.
   const sendingDeletes = useRef(new Set<string>())
+  // The note open in the Composer.
+  const [editing, setEditing] = useState<Note | null>(null)
+  // Saves sent but not answered yet, by id: the copy to restore on failure, and
+  // whether the note is moving to another month (so it's off this list).
+  const savingEdits = useRef(new Map<string, { previous: Note; moving: boolean }>())
+  // The same ids, as state, so their rows can't be opened again meanwhile.
+  const [savingIds, setSavingIds] = useState<ReadonlySet<string>>(new Set())
+  // "Saved and moved to …", shown in the toast slot unless a delete's Undo is.
+  const [notice, setNotice] = useState<string | null>(null)
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const keyboardInset = useKeyboardInset()
   // A refresh refetches the month without touching `loaded` or `loadError`,
   // and never clears the notes on screen, even when it fails.
@@ -58,8 +69,8 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
   const [refreshError, setRefreshError] = useState<string | null>(null)
   const inFlight = useRef(false)
   const lastLoadStartedAt = useRef(0)
-  // Notes added or deleted here while a refresh is in flight, so its result
-  // doesn't undo them. Null when no refresh is running.
+  // Notes added, deleted or edited here while a refresh is in flight, so its
+  // result doesn't undo them. Null when no refresh is running.
   const localChanges = useRef<{
     added: Set<string>
     deleted: Set<string>
@@ -92,6 +103,7 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
     mounted.current = true
     return () => {
       mounted.current = false
+      if (noticeTimer.current) clearTimeout(noticeTimer.current)
     }
   }, [])
 
@@ -122,7 +134,11 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
     // as deleted here: the server may answer before the delete lands.
     const deleted = new Set(sendingDeletes.current)
     if (pending.current) deleted.add(pending.current.note.id)
-    const local = { added: new Set<string>(), deleted, edited: new Set<string>() }
+    // Likewise a save still being sent: an edit keeps the copy on screen, and a
+    // move counts as deleted from this month.
+    const edited = new Set<string>()
+    for (const [id, { moving }] of savingEdits.current) (moving ? deleted : edited).add(id)
+    const local = { added: new Set<string>(), deleted, edited }
     localChanges.current = local
     setRefreshing(true)
     api
@@ -163,12 +179,88 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
     }
   }
 
+  function showNotice(message: string) {
+    if (noticeTimer.current) clearTimeout(noticeTimer.current)
+    setNotice(message)
+    noticeTimer.current = setTimeout(() => setNotice(null), UNDO_MS)
+  }
+
+  function setSaving(id: string, saving: { previous: Note; moving: boolean } | null) {
+    if (saving) savingEdits.current.set(id, saving)
+    else savingEdits.current.delete(id)
+    setSavingIds(new Set(savingEdits.current.keys()))
+  }
+
+  // Shows the change at once and sends it behind; a failure puts the previous
+  // copy back. A note being deleted (waiting for Undo) gets the result in the
+  // copy Undo holds instead, so the save never re-adds its row.
+  function handleSave(input: { type: NoteType; text: string; month: YearMonth }) {
+    if (!editing) return
+    const previous = notes.find((n) => n.id === editing.id) ?? editing
+    const id = previous.id
+    const moving = input.month.year !== month.year || input.month.month !== month.month
+    const update: NoteUpdate = {}
+    if (input.type !== previous.type) update.type = input.type
+    if (input.text !== previous.text) update.text = input.text
+    if (moving) update.moveTo = input.month
+    setEditing(null)
+    if (Object.keys(update).length === 0) return
+
+    if (moving) {
+      localChanges.current?.deleted.add(id)
+      setNotes((prev) => prev.filter((n) => n.id !== id))
+    } else {
+      localChanges.current?.edited.add(id)
+      setNotes((prev) => replaceNote(prev, { ...previous, type: input.type, text: input.text }))
+    }
+    setSaving(id, { previous, moving })
+
+    api
+      .updateNote(month, id, update)
+      .then((saved) => {
+        if (!mounted.current) return
+        if (moving) {
+          showNotice(`Saved and moved to ${formatShortMonth(input.month)}`)
+        } else {
+          setNotes((prev) => replaceNote(prev, saved))
+          if (pending.current?.note.id === id) pending.current.note = saved
+        }
+        setError(null)
+      })
+      .catch((e: Error) => {
+        if (!mounted.current) return
+        if (e.message === 'API error: 404') {
+          localChanges.current?.deleted.add(id)
+          setNotes((prev) => prev.filter((n) => n.id !== id))
+          setError('Could not save: the note no longer exists')
+          return
+        }
+        if (pending.current?.note.id === id) {
+          pending.current.note = previous
+        } else if (moving) {
+          localChanges.current?.deleted.delete(id)
+          setNotes((prev) => mergeNotes(prev, [previous]))
+        } else {
+          setNotes((prev) => replaceNote(prev, previous))
+        }
+        setError(`Could not save: ${e.message}`)
+      })
+      .finally(() => {
+        if (mounted.current) setSaving(id, null)
+        else savingEdits.current.delete(id)
+      })
+  }
+
   function handleDelete(note: Note) {
+    if (editing?.id === note.id) setEditing(null)
     sendPendingDelete()
     localChanges.current?.deleted.add(note.id)
     setNotes((prev) => prev.filter((n) => n.id !== note.id))
     pending.current = { note, timer: setTimeout(sendPendingDelete, UNDO_MS) }
     setPendingNote(note)
+    // The Undo toast takes the slot from a "moved" notice.
+    if (noticeTimer.current) clearTimeout(noticeTimer.current)
+    setNotice(null)
   }
 
   // The delete needs the ID token, so send it while still signed in rather
@@ -290,9 +382,9 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
                           key={note.id}
                           note={note}
                           onDelete={() => handleDelete(note)}
-                          onEdit={() => {}}
-                          editing={false}
-                          editDisabled={false}
+                          onEdit={() => setEditing(note)}
+                          editing={editing?.id === note.id}
+                          editDisabled={savingIds.has(note.id)}
                         />
                       ))}
                     </ul>
@@ -312,32 +404,43 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
         </div>
       </main>
 
-      {pendingNote && (
-        // Sits just above the Composer, which is lifted by the same keyboard inset.
+      {(pendingNote || notice) && (
+        // Sits just above the Composer, which is lifted by the same keyboard
+        // inset and is taller while editing.
         <div
           role="status"
           style={{ '--keyboard-inset': `${keyboardInset}px` } as CSSProperties}
-          className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+7.5rem+var(--keyboard-inset))] z-20 flex justify-center px-4"
+          className={`fixed inset-x-0 z-20 flex justify-center px-4 ${
+            editing
+              ? 'bottom-[calc(env(safe-area-inset-bottom)+9rem+var(--keyboard-inset))]'
+              : 'bottom-[calc(env(safe-area-inset-bottom)+7.5rem+var(--keyboard-inset))]'
+          }`}
         >
-          <div className="flex items-center gap-4 rounded-full bg-gray-900 py-1 pr-1 pl-5 text-sm text-white shadow-lg">
-            <span>Deleted</span>
-            <button
-              type="button"
-              onClick={handleUndo}
-              className="min-h-10 cursor-pointer rounded-full px-4 font-semibold text-yellow-300"
-            >
-              Undo
-            </button>
-          </div>
+          {pendingNote ? (
+            <div className="flex items-center gap-4 rounded-full bg-gray-900 py-1 pr-1 pl-5 text-sm text-white shadow-lg">
+              <span>Deleted</span>
+              <button
+                type="button"
+                onClick={handleUndo}
+                className="min-h-10 cursor-pointer rounded-full px-4 font-semibold text-yellow-300"
+              >
+                Undo
+              </button>
+            </div>
+          ) : (
+            <div className="rounded-full bg-gray-900 px-5 py-3 text-sm text-white shadow-lg">
+              {notice}
+            </div>
+          )}
         </div>
       )}
 
       <Composer
         onAdd={handleAdd}
-        editing={null}
+        editing={editing}
         month={month}
-        onSave={() => {}}
-        onCancel={() => {}}
+        onSave={handleSave}
+        onCancel={() => setEditing(null)}
       />
     </div>
   )
