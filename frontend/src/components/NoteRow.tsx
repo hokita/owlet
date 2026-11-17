@@ -82,7 +82,7 @@ export default function NoteRow({ note, onDelete, onEdit, editing, editDisabled 
         // swipe, so it never deletes.
         onTouchCancel={resetGesture}
         style={{ transform: `translateX(${offset}px)` }}
-        className={`relative flex min-h-11 items-center gap-2 px-4 py-2 touch-pan-y ${
+        className={`relative flex min-h-11 items-start gap-2 px-4 py-2 touch-pan-y ${
           editing ? 'bg-blue-50' : 'bg-white'
         } ${offset === 0 ? 'transition-transform duration-200' : ''}`}
       >
@@ -91,7 +91,7 @@ export default function NoteRow({ note, onDelete, onEdit, editing, editDisabled 
           onClick={handleEditClick}
           disabled={editDisabled}
           aria-label={`Edit "${note.text}"`}
-          className="min-w-0 flex-1 cursor-pointer rounded text-left text-base wrap-anywhere focus-visible:outline-2 focus-visible:outline-blue-500"
+          className="min-w-0 flex-1 cursor-pointer rounded text-left text-base whitespace-pre-wrap wrap-anywhere focus-visible:outline-2 focus-visible:outline-blue-500"
         >
           {note.text}
         </button>
