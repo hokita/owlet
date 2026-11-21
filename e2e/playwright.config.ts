@@ -18,10 +18,6 @@ export default defineConfig({
       url: 'http://localhost:9099',
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
-      // By default Playwright SIGKILLs the webServer's process group. firebase
-      // starts the Firestore emulator (Java) in its own process group, so it
-      // survives that and is orphaned on :8081. SIGTERM lets the firebase CLI
-      // run its clean shutdown, which stops Java too.
       gracefulShutdown: { signal: 'SIGTERM', timeout: 15_000 },
     },
     {

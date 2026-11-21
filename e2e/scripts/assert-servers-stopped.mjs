@@ -1,6 +1,3 @@
-// Fails if anything is still listening on the ports the e2e webServers use.
-// Run after `playwright test` when Playwright started the servers itself (CI,
-// or locally with CI=1); a leftover listener means a server was orphaned.
 import net from 'node:net'
 
 const PORTS = {

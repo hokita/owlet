@@ -12,11 +12,8 @@ test('a note added over MCP shows after pulling to refresh', async ({ page, requ
   await expect(page.getByRole('region', { name: 'Events' })).toBeVisible()
 
   await addNoteOverMcp(request, { year: 2001, month: 7, type: 'event', text: `muse ${run}` })
-  // Not shown yet: it is the refresh that shows it, not the load.
   await expect(page.getByText(`muse ${run}`)).toHaveCount(0)
 
-  // A real touch drag from the top of the page, below the sticky header.
-  // newCDPSession makes this test Chromium-only (fine: the config has no projects).
   const cdp = await page.context().newCDPSession(page)
   await cdp.send('Input.dispatchTouchEvent', {
     type: 'touchStart',

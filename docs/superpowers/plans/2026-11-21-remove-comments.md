@@ -36,7 +36,7 @@ AST scan (TypeScript compiler, all tracked `.ts/.tsx/.js/.mjs`) cross-checked wi
 
 - `frontend/src/vite-env.d.ts:1`: `/// <reference types="vite/client" />`. TypeScript reads it.
 - `scripts/check-node-pins.sh:1`: `#!/usr/bin/env bash`. The shebang.
-- `frontend/src/components/Composer.tsx:22` and `:31`: `// ignore` inside an empty `catch {}`. ESLint's `no-empty`, part of `eslint.configs.recommended`, fails on an empty block without a comment. Task 2 keeps them so that its commit stays comments-only. Task 5 removes them by fixing the code. The repo has no other lint/type ignore directives (`git grep` for eslint-disable, ts-ignore, ts-expect-error, biome-ignore, nolint, prettier-ignore and c8/istanbul finds none).
+- `frontend/src/components/Composer.tsx:22` and `:31`: `// ignore` inside an empty `catch {}`. A third one is the submit handler's `catch {}` (main `:136-137`), whose only content is a comment. ESLint's `no-empty`, part of `eslint.configs.recommended`, fails on an empty block without a comment. Task 2 keeps them so that its commit stays comments-only. Task 5 removes them by fixing the code. The repo has no other lint/type ignore directives (`git grep` for eslint-disable, ts-ignore, ts-expect-error, biome-ignore, nolint, prettier-ignore and c8/istanbul finds none).
 
 ## Traps that lose their comment (for the PR body)
 
@@ -104,6 +104,7 @@ Done by the controller:
 - Built `$S/base-backend-js` (`tsc --removeComments`) and `$S/base-frontend-dist` (`vite build`). Both builds are reproducible.
 - Wrote `$S/tokens.cjs` (usage: `node $S/tokens.cjs <typescript-dir> <baseRoot> <files...>`). It compares AST leaf tokens and exits 1 on any difference.
 - Ran the baseline: tests, lint, build and `prettier --check src` pass on main, and so does `scripts/check-node-pins.sh`.
+- Found in Task 2: Tailwind scans source text, so the word "inline" in a deleted comment had generated an unused `.inline{display:inline}` rule. Removing the comment removes that rule from the CSS. The JS bundle stays byte-identical. Expected CSS diff: exactly that rule.
 
 `$S` is the controller's scratchpad, and its path is given in each brief.
 
@@ -129,6 +130,7 @@ After each edit task, before committing:
 ### Task 3: e2e (`e2e/**`, 28 comment lines removed)
 
 - [ ] Delete every comment in `e2e/`.
+- [ ] Commit the updated plan file along with it.
 - [ ] Run V steps 1, 2 and the e2e Prettier check.
 - [ ] Commit: `chore(e2e): remove code comments`
 
@@ -141,14 +143,15 @@ After each edit task, before committing:
 
 ### Task 5: Remove the `no-empty` workaround in `frontend/src/components/Composer.tsx` (code change)
 
-**Files:** Modify `frontend/src/components/Composer.tsx` (`loadLastType`, `saveLastType`). Test: `frontend/src/components/Composer.test.tsx`.
+**Files:** Modify `frontend/src/components/Composer.tsx` (`loadLastType`, `saveLastType`, and the submit handler's `try/catch/finally` around `onAdd`). Test: `frontend/src/components/Composer.test.tsx`.
 
 - [ ] **Step 1: Pin the fallback behaviour with tests, then delete both `// ignore` lines to get the red.** Add two tests to `Composer.test.tsx`:
   - `starts on event when localStorage.getItem throws`: `vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('blocked') })`, render, and expect the `event` button to have `aria-pressed="true"`.
   - `still adds the note when localStorage.setItem throws`: spy on `setItem` the same way, pick `next`, type, and click Add. Expect `onAdd` to have been called and no error to be thrown.
 
   Restore the spies in `afterEach`. These tests pass on the current code, because the behaviour already exists. Then delete the two `// ignore` lines and run `npm run lint`. Expected: FAIL, `no-empty` at both catches. That lint failure is the red.
-- [ ] **Step 2: Make the catches non-empty with real code.** `loadLastType(): NoteType` reads the key through `readStoredType(): string | null`, which is `try { return localStorage.getItem(LAST_TYPE_KEY) } catch { return null }`. `saveLastType(type: NoteType): boolean` is `try { localStorage.setItem(...); return true } catch { return false }`. No behaviour change. No new comments.
+- [ ] **Step 1b: The submit catch.** `keeps the text when adding fails` already covers it. Delete its comment as well, and lint fails on the empty catch.
+- [ ] **Step 2: Make the catches non-empty with real code.** Submit: `const added = await onAdd({ type, text: trimmed }).then(() => true, () => false)`, then clear the text and save the type only `if (added)`. Keep the `finally` work (`setSending(false)`, focus) after it, unconditionally, so no try/catch is needed. `loadLastType(): NoteType` reads the key through `readStoredType(): string | null`, which is `try { return localStorage.getItem(LAST_TYPE_KEY) } catch { return null }`. `saveLastType(type: NoteType): boolean` is `try { localStorage.setItem(...); return true } catch { return false }`. No behaviour change. No new comments.
 - [ ] **Step 3: Green.** `npm test`, `npm run lint`, `npm run build` and `npx prettier --check src` in `frontend`. Expected: all pass. `git grep -n '// ignore'` finds nothing.
 - [ ] **Step 4: Commit:** `fix(frontend): handle storage errors without empty catch blocks`
 

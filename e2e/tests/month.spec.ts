@@ -1,8 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { signIn } from '../fixtures/auth'
 
-// The emulator keeps data between tests (and between local runs that reuse it),
-// so note texts are made unique per run.
 const run = Date.now()
 
 test('lands on the current month after signing in', async ({ page }) => {
@@ -74,7 +72,6 @@ test.describe('at iPhone width', () => {
 
     expect(buttonBox.x).toBeGreaterThanOrEqual(rowBox.x)
     expect(buttonBox.x + buttonBox.width).toBeLessThanOrEqual(rowBox.x + rowBox.width)
-    // Wrapped, not overflowing its own box (which the row would clip).
     expect(await textEl.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true)
   })
 })
@@ -92,7 +89,6 @@ test.describe('on a touch-only phone', () => {
     await page.getByRole('button', { name: 'Add note' }).click()
     await expect(page.getByText(`touch ${run}`)).toBeVisible()
 
-    // getByRole skips display:none elements, so this is what VoiceOver sees.
     const deleteButton = page.getByRole('button', { name: `Delete "touch ${run}"` })
     await expect(deleteButton).toHaveCount(1)
     await deleteButton.focus()

@@ -2,7 +2,6 @@ import { expect, test } from '@playwright/test'
 import { signIn } from '../fixtures/auth'
 import { addNoteOverMcp, callMcpTool, parseToolText } from '../fixtures/mcp'
 
-// The emulator keeps data between tests, so note texts are made unique per run.
 const run = Date.now()
 
 test("edits a note's text and type in the app", async ({ page }) => {
@@ -81,7 +80,6 @@ test.describe('on a touch phone', () => {
     })
     expect(updated).not.toContain('"isError":true')
 
-    // A real touch drag from the top of the page, below the sticky header.
     const cdp = await page.context().newCDPSession(page)
     await cdp.send('Input.dispatchTouchEvent', {
       type: 'touchStart',
