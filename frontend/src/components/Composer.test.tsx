@@ -146,7 +146,6 @@ describe('Composer', () => {
   })
 
   it('re-measures the box when switching between adding and editing', () => {
-    // jsdom has no layout: give the box 24px lines and a scrollHeight of one line per row of text.
     const sheet = document.createElement('style')
     sheet.textContent = 'textarea { line-height: 24px; padding: 8px 0; }'
     document.head.append(sheet)
@@ -215,7 +214,6 @@ describe('Composer', () => {
     const onHeightChange = vi.fn()
     const { container, unmount } = render(composer({ onHeightChange }))
     expect(onHeightChange).toHaveBeenLastCalledWith(112)
-    // The note box is observed too, for width changes.
     expect(observedElements()).toContain(container.querySelector('form'))
 
     setFormHeight(208)

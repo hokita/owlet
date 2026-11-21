@@ -7,7 +7,6 @@ import type { YearMonth } from './month'
 import LoginPage from './pages/LoginPage'
 import MonthPage from './pages/MonthPage'
 
-// The only route is /:year/:month; anything else lands on the current month.
 function monthFromLocation(): YearMonth {
   return parseMonthPath(window.location.pathname) ?? currentMonth()
 }
@@ -20,7 +19,6 @@ export default function App() {
     return onAuthStateChanged(auth, setUser)
   }, [])
 
-  // Puts `/` (or an invalid path) in the URL bar as the month being shown.
   useEffect(() => {
     if (window.location.pathname !== monthPath(month)) {
       window.history.replaceState(null, '', monthPath(month))

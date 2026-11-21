@@ -12,8 +12,6 @@ const COUNTER_FROM = 400
 
 const LAST_TYPE_KEY = 'owlet.lastNoteType'
 
-// localStorage can throw (private mode, blocked storage); the last-used type is
-// only a convenience, so fall back silently.
 function loadLastType(): NoteType {
   try {
     const stored = localStorage.getItem(LAST_TYPE_KEY)
@@ -34,13 +32,10 @@ function saveLastType(type: NoteType) {
 
 interface ComposerProps {
   onAdd: (input: { type: NoteType; text: string }) => Promise<void>
-  // The note being edited; while set, the bar edits it instead of adding.
   editing: Note | null
-  // The month the edited note is in (the page's month).
   month: YearMonth
   onSave: (input: { type: NoteType; text: string; month: YearMonth }) => void
   onCancel: () => void
-  // Called with the bar's height (px, safe-area padding included) as it changes.
   onHeightChange?: (height: number) => void
 }
 
@@ -55,7 +50,6 @@ export default function Composer({
   const [type, setType] = useState<NoteType>(loadLastType)
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
-  // Edit fields are separate from the new-note draft, which survives an edit.
   const [editText, setEditText] = useState('')
   const [editType, setEditType] = useState<NoteType>('event')
   const [editMonth, setEditMonth] = useState('')
@@ -68,7 +62,6 @@ export default function Composer({
   useAutoGrow(inputRef, text)
   useAutoGrow(editInputRef, editText)
 
-  // Load the fields when another note (or none) is being edited.
   const editingId = editing?.id ?? null
   if (editingId !== loadedId) {
     setLoadedId(editingId)
@@ -79,9 +72,6 @@ export default function Composer({
     }
   }
 
-  // The bar grows with its text, the Editing line and the counter; the page
-  // places the toast and list padding from its measured height. Without
-  // ResizeObserver the page keeps its default.
   useEffect(() => {
     const form = formRef.current
     if (!form || !onHeightChange || typeof ResizeObserver === 'undefined') return
@@ -91,7 +81,6 @@ export default function Composer({
     return () => observer.disconnect()
   }, [onHeightChange])
 
-  // Opening a note (or switching to another) puts the cursor in its text.
   useEffect(() => {
     if (editingId) editInputRef.current?.focus()
   }, [editingId])
@@ -105,11 +94,9 @@ export default function Composer({
   }
 
   function handleKeyDown(e: KeyboardEvent) {
-    // While an IME is composing, Escape cancels the conversion, not the edit.
     if (editing && e.key === 'Escape' && !e.nativeEvent.isComposing) onCancel()
   }
 
-  // Return adds a line; ⌘/Ctrl+Return sends. Not while an IME is converting.
   function handleTextKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key !== 'Enter' || !(e.metaKey || e.ctrlKey)) return
     if (e.nativeEvent.isComposing || e.keyCode === 229) return
@@ -129,8 +116,6 @@ export default function Composer({
     setSending(true)
     try {
       await onAdd({ type, text: trimmed })
-      // Only clear what was sent: the input stays editable while sending, and
-      // anything typed in the meantime is the next note.
       setText((current) => (current === draft ? '' : current))
       saveLastType(type)
     } catch {

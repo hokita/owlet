@@ -8,7 +8,6 @@ import {
   uninstallFakeResizeObserver,
 } from './testing/fakeResizeObserver'
 
-// jsdom has no layout: the style is inline and scrollHeight is stubbed.
 function setup(value: string, scrollHeight: number) {
   const el = document.createElement('textarea')
   Object.assign(el.style, {
@@ -60,7 +59,6 @@ describe('useAutoGrow', () => {
       const { el, stub } = setup('a long line', 40)
       expect(el.style.height).toBe('42px')
 
-      // Narrower (window resized, phone rotated): the text now wraps to 2 lines.
       setWidth(el, 150)
       stub(64)
       triggerResize()

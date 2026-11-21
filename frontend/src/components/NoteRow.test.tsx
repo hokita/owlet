@@ -58,7 +58,6 @@ describe('NoteRow', () => {
     const content = screen.getByTestId('note-row-content')
     swipe(content, 300, 150)
     expect(onDelete).toHaveBeenCalledTimes(1)
-    // A tap always starts with a touchstart, which clears the swipe.
     fireEvent.touchStart(content, { touches: [{ clientX: 200, clientY: 0 }] })
     fireEvent.touchEnd(content, { changedTouches: [{ clientX: 200, clientY: 0 }] })
     fireEvent.click(screen.getByRole('button', { name: /^Edit "Trip/ }))

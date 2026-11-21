@@ -68,7 +68,6 @@ function pull(dy: number) {
   fireEvent.touchEnd(screen.getByRole('main'))
 }
 
-// Further getReview calls are held open until the test settles them.
 function deferReview() {
   let resolve: (notes: unknown[]) => Promise<void> = async () => {}
   mockApi.getReview.mockReturnValue(
@@ -171,7 +170,6 @@ describe('MonthPage', () => {
   describe('adding before the month has loaded', () => {
     const added = { id: 'n4', type: 'event', text: 'Early', createdAt: '2026-11-04T00:00:00.000Z' }
 
-    // Both requests are held open so each test can choose which response lands first.
     function renderWithPendingRequests() {
       let resolveLoad: (review: unknown) => void = () => {}
       let resolveAdd: (note: unknown) => void = () => {}
@@ -431,7 +429,6 @@ describe('MonthPage', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Delete "Trip"' }))
       const review = deferReview()
       pull(200)
-      // Deleting another note sends Trip's delete right away.
       fireEvent.click(screen.getByRole('button', { name: 'Delete "Run"' }))
       expect(mockApi.deleteNote).toHaveBeenCalledWith(november, 'n1')
 
@@ -448,7 +445,6 @@ describe('MonthPage', () => {
         })
       )
       fireEvent.click(screen.getByRole('button', { name: 'Delete "Trip"' }))
-      // Deleting another note sends Trip's delete, which stays unanswered.
       fireEvent.click(screen.getByRole('button', { name: 'Delete "Run"' }))
       expect(mockApi.deleteNote).toHaveBeenCalledWith(november, 'n1')
 
@@ -504,8 +500,6 @@ describe('MonthPage', () => {
       expect(mockApi.getReview).toHaveBeenCalledTimes(1)
     })
 
-    // Smoke test: React 18 doesn't warn on a late setState, so this can't catch a
-    // missing guard; it only checks a late result doesn't throw or log.
     it('a refresh after the month changes is ignored (smoke test)', async () => {
       const consoleError = vi.spyOn(console, 'error')
       const { unmount } = await renderLoaded()
@@ -547,7 +541,6 @@ describe('MonthPage', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     }
 
-    // The next updateNote call is held open until the test settles it.
     function deferUpdate() {
       let settle: (fn: (r: (v: unknown) => void, j: (e: Error) => void) => void) => void = () => {}
       mockApi.updateNote.mockReturnValueOnce(

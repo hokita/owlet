@@ -15,6 +15,7 @@
 - Delete every comment, including warnings about traps, races and SDK bugs.
 - Keep only directives that a tool actually reads: eslint-disable*, @ts-expect-error/@ts-ignore, biome-ignore, prettier-ignore, //go:build, //go:embed, `/// <reference`, shebangs and license headers.
 - If deleting a comment breaks a tool, keep the minimum the tool needs and list it in the PR body.
+- Never ignore lint or type errors. Remove every lint/type ignore (eslint-disable*, biome-ignore, @ts-ignore, @ts-expect-error, //nolint, and any comment kept only to satisfy `no-empty`), and fix the code so that lint and typecheck pass without it. Do it in separate code commits after the comment removal, with a failing test first where behaviour is involved. List each fix in the PR body under "Lint ignores removed". Only build-needed directives stay: //go:build, //go:embed, `/// <reference`, shebangs.
 - Don't add code to make up for a removed warning. The PR body lists each one under "Traps that lost their comment".
 - Never edit code. Never reformat, except to avoid a blank-line pileup (two blank lines in a row, or a blank line right after `{` or before `}`) where a comment was removed.
 - Don't touch: `docs/`, `README.md`, lockfiles, `frontend/public/*`, `*.json`, `.env.e2e` files, ignore files and `.prettierrc`.
@@ -26,16 +27,16 @@ AST scan (TypeScript compiler, all tracked `.ts/.tsx/.js/.mjs`) cross-checked wi
 | Area | Comment lines now | Kept |
 |---|---|---|
 | `backend/src` | 49 | 0 |
-| `frontend/src` | 142 | 3 |
+| `frontend/src` | 142 | 3 after Task 2, 1 after Task 5 |
 | `e2e/` | 28 | 0 |
 | config: `.github/workflows`, `backend/.env.example`, `scripts/check-node-pins.sh`, `firestore.rules` | 21 | 1 |
-| **Total** | **240** | **4** (**236 lines removed**) |
+| **Total** | **240** | **2** after Task 5 (**238 lines removed**) |
 
 ## Keep-list
 
 - `frontend/src/vite-env.d.ts:1`: `/// <reference types="vite/client" />`. TypeScript reads it.
 - `scripts/check-node-pins.sh:1`: `#!/usr/bin/env bash`. The shebang.
-- `frontend/src/components/Composer.tsx:22` and `:31`: `// ignore` inside an empty `catch {}`. This is the tool exception: ESLint's `no-empty`, part of `eslint.configs.recommended`, fails on an empty block without a comment. Changing the lint config or the code would be a code edit, so this PR keeps them and lists them.
+- `frontend/src/components/Composer.tsx:22` and `:31`: `// ignore` inside an empty `catch {}`. ESLint's `no-empty`, part of `eslint.configs.recommended`, fails on an empty block without a comment. Task 2 keeps them so that its commit stays comments-only. Task 5 removes them by fixing the code. The repo has no other lint/type ignore directives (`git grep` for eslint-disable, ts-ignore, ts-expect-error, biome-ignore, nolint, prettier-ignore and c8/istanbul finds none).
 
 ## Traps that lose their comment (for the PR body)
 
@@ -88,7 +89,7 @@ Config
 
 ## Review Focus
 
-1. Empty `catch {}`: deleting `// ignore` breaks `npm run lint`. Both stay, and lint runs after Task 2.
+1. Empty `catch {}`: deleting `// ignore` breaks `npm run lint`. Both stay through Task 2, and Task 5 replaces them with real code.
 2. JSX comments (`NoteRow.tsx`, `MonthPage.tsx`): deleting a `{/* */}` must leave no `{}` and no significant JSX whitespace change. The token check normalizes newline-only JsxText, and the Vite bundle diff catches the rest.
 3. Trailing comments in `backend/src/services/noteInput.test.ts:32-38`: delete only `// ...` and the space before it, and keep the comma.
 4. Blank-line pileups: `npx prettier --check src` per package (Prettier collapses multiple blank lines). `npm run format:check` already fails on main, because it scans the untracked `dist/`.
@@ -110,7 +111,7 @@ Done by the controller:
 
 After each edit task, before committing:
 1. `node $S/tokens.cjs $PWD/backend/node_modules/typescript $S/base <changed .ts/.tsx/.js/.mjs files>`. Expected: no output, exit 0.
-2. `git diff -U0 origin/main -- <area> | grep -E '^\+[^+]'`. Expected: no output (only deletions).
+2. `git diff -U0 origin/main -- <area> | grep -E '^\+[^+]'`. Expected: no output (only deletions), apart from lines that only lost a trailing comment.
 3. In each package the task touched: `npm test`, `npm run lint`, `npm run build` (this is the typecheck) and `npx prettier --check src`. Expected: pass. e2e has no tsconfig or lint, so check it with step 1 and `npx --prefix backend prettier --check e2e`.
 
 ### Task 1: backend (`backend/src/**`, 49 comment lines removed)
@@ -123,7 +124,7 @@ After each edit task, before committing:
 
 - [ ] Delete every comment in `frontend/src` except the three frontend lines in the Keep-list.
 - [ ] Run V. Also run `npx vite build --outDir $S/new-frontend-dist` in `frontend`, then `diff -r -x '*.map' $S/base-frontend-dist $S/new-frontend-dist`. Expected: no difference.
-- [ ] Commit: `chore(frontend): remove code comments`
+- [ ] Commit, including the updated plan file: `chore(frontend): remove code comments`
 
 ### Task 3: e2e (`e2e/**`, 28 comment lines removed)
 
@@ -138,8 +139,21 @@ After each edit task, before committing:
 - [ ] Run `scripts/check-node-pins.sh`. Then parse each workflow: `node -e "require('./e2e/node_modules/yaml').parse(require('fs').readFileSync(process.argv[1],'utf8'))" <file>`. Expected: no errors.
 - [ ] Commit: `chore: remove comments from workflows, scripts and rules`
 
-### Task 5: Final check
+### Task 5: Remove the `no-empty` workaround in `frontend/src/components/Composer.tsx` (code change)
+
+**Files:** Modify `frontend/src/components/Composer.tsx` (`loadLastType`, `saveLastType`). Test: `frontend/src/components/Composer.test.tsx`.
+
+- [ ] **Step 1: Pin the fallback behaviour with tests, then delete both `// ignore` lines to get the red.** Add two tests to `Composer.test.tsx`:
+  - `starts on event when localStorage.getItem throws`: `vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('blocked') })`, render, and expect the `event` button to have `aria-pressed="true"`.
+  - `still adds the note when localStorage.setItem throws`: spy on `setItem` the same way, pick `next`, type, and click Add. Expect `onAdd` to have been called and no error to be thrown.
+
+  Restore the spies in `afterEach`. These tests pass on the current code, because the behaviour already exists. Then delete the two `// ignore` lines and run `npm run lint`. Expected: FAIL, `no-empty` at both catches. That lint failure is the red.
+- [ ] **Step 2: Make the catches non-empty with real code.** `loadLastType(): NoteType` reads the key through `readStoredType(): string | null`, which is `try { return localStorage.getItem(LAST_TYPE_KEY) } catch { return null }`. `saveLastType(type: NoteType): boolean` is `try { localStorage.setItem(...); return true } catch { return false }`. No behaviour change. No new comments.
+- [ ] **Step 3: Green.** `npm test`, `npm run lint`, `npm run build` and `npx prettier --check src` in `frontend`. Expected: all pass. `git grep -n '// ignore'` finds nothing.
+- [ ] **Step 4: Commit:** `fix(frontend): handle storage errors without empty catch blocks`
+
+### Task 6: Final check
 
 - [ ] Rerun all of V across the branch, plus both build diffs.
 - [ ] Check that ports 5174, 8090, 9099 and 8081 are free (`lsof -nP -iTCP:<port> -sTCP:LISTEN`). If one is taken, report it and don't kill anything. Then run `cd e2e && npm test` once and `npm run test:servers-stopped`. Expected: all pass.
-- [ ] Rescan every tracked file for comments. Expected: exactly the four Keep-list lines remain.
+- [ ] Rescan every tracked file for comments. Expected: only `frontend/src/vite-env.d.ts:1` and the shebang `scripts/check-node-pins.sh:1` remain.

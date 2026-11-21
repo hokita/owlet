@@ -1,8 +1,5 @@
 import { useEffect, useState } from 'react'
 
-// How many pixels at the bottom of the layout viewport the on-screen keyboard
-// covers. iOS Safari doesn't resize the layout viewport for the keyboard, so a
-// `position: fixed; bottom: 0` bar would sit behind it without this offset.
 export function useKeyboardInset(): number {
   const [inset, setInset] = useState(0)
 
