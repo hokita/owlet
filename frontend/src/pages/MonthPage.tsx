@@ -14,16 +14,12 @@ import { useKeyboardInset } from '../useKeyboardInset'
 import { usePullToRefresh } from '../usePullToRefresh'
 import { useRefreshOnReturn } from '../useRefreshOnReturn'
 
-// How long a deleted note can be brought back before the delete is sent.
 const UNDO_MS = 5000
 
-// Coming back to the app refreshes only if the month was last fetched this long ago.
 const AUTO_REFRESH_MIN_MS = 30_000
 
-// Height (px) of the pull indicator while the spinner shows.
 const REFRESHING_HEIGHT = 48
 
-// The Composer's one-line height (px), used until it reports its own.
 const DEFAULT_COMPOSER_HEIGHT = 112
 
 const REFRESH_FAILED = "Couldn't refresh. Pull to try again."
@@ -39,53 +35,34 @@ interface MonthPageProps {
   onNavigate: (month: YearMonth) => void
 }
 
-// Rendered with `key` = the month, so switching months remounts it: state
-// starts fresh, a stale load is ignored, and a pending delete is sent.
 export default function MonthPage({ month, onNavigate }: MonthPageProps) {
-  // `notes` can hold notes added before the month has loaded; they're only
-  // shown once a load succeeds, so a partial list never passes for the month.
   const [notes, setNotes] = useState<Note[]>([])
   const [loaded, setLoaded] = useState(false)
-  // Kept apart from add/delete errors: it stays up, with Retry, until a load
-  // succeeds, whatever else happens meanwhile.
   const [loadError, setLoadError] = useState<string | null>(null)
   const [loadAttempt, setLoadAttempt] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [pendingNote, setPendingNote] = useState<Note | null>(null)
   const pending = useRef<{ note: Note; timer: ReturnType<typeof setTimeout> } | null>(null)
-  // Deletes sent but not answered yet, by id. A save that answers first
-  // updates `note`, so a failed delete brings back what the server has.
   const sendingDeletes = useRef(new Map<string, { note: Note }>())
-  // The note open in the Composer.
   const [editing, setEditing] = useState<Note | null>(null)
-  // Saves sent but not answered yet, by id: the copy to restore on failure, and
-  // whether the note is moving to another month (so it's off this list).
   const savingEdits = useRef(new Map<string, { previous: Note; moving: boolean }>())
-  // The same ids, as state, so their rows can't be opened again meanwhile.
   const [savingIds, setSavingIds] = useState<ReadonlySet<string>>(new Set())
-  // "Saved and moved to …", shown in the toast slot unless a delete's Undo is.
   const [notice, setNotice] = useState<string | null>(null)
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const keyboardInset = useKeyboardInset()
   const [composerHeight, setComposerHeight] = useState(DEFAULT_COMPOSER_HEIGHT)
-  // A refresh refetches the month without touching `loaded` or `loadError`,
-  // and never clears the notes on screen, even when it fails.
   const [refreshing, setRefreshing] = useState(false)
   const [refreshError, setRefreshError] = useState<string | null>(null)
   const inFlight = useRef(false)
   const lastLoadStartedAt = useRef(0)
-  // Notes added, deleted or edited here while a refresh is in flight, so its
-  // result doesn't undo them. Null when no refresh is running.
   const localChanges = useRef<{
     added: Set<string>
     deleted: Set<string>
     edited: Set<string>
   } | null>(null)
-  // A refresh still running when the month changes is ignored.
   const mounted = useRef(true)
   const mainRef = useRef<HTMLElement>(null)
 
-  // Resolves once the delete request has settled (failures are handled here).
   const sendPendingDelete = useCallback((): Promise<void> => {
     const current = pending.current
     if (!current) return Promise.resolve()
@@ -135,12 +112,8 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
     if (inFlight.current) return
     inFlight.current = true
     lastLoadStartedAt.current = Date.now()
-    // A note waiting for its Undo, or whose delete is still being sent, counts
-    // as deleted here: the server may answer before the delete lands.
     const deleted = new Set(sendingDeletes.current.keys())
     if (pending.current) deleted.add(pending.current.note.id)
-    // Likewise a save still being sent: an edit keeps the copy on screen, and a
-    // move counts as deleted from this month.
     const edited = new Set<string>()
     for (const [id, { moving }] of savingEdits.current) (moving ? deleted : edited).add(id)
     const local = { added: new Set<string>(), deleted, edited }
@@ -163,8 +136,6 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
       })
   }
 
-  // Skips quick hide/show flicker (the interval; `refresh()` itself skips a
-  // return while a refresh is running) and a month that hasn't loaded yet.
   useRefreshOnReturn(() => {
     if (!loaded || Date.now() - lastLoadStartedAt.current < AUTO_REFRESH_MIN_MS) return
     refresh()
@@ -196,24 +167,16 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
     setSavingIds(new Set(savingEdits.current.keys()))
   }
 
-  // The copy a delete of this note will restore if it fails: the one waiting
-  // for Undo, or the one already being sent.
   function deletingCopy(id: string): { note: Note } | undefined {
     return pending.current?.note.id === id ? pending.current : sendingDeletes.current.get(id)
   }
 
-  // Shows the change at once and sends it behind; a failure puts the previous
-  // copy back. A note being deleted (waiting for Undo) gets the result in the
-  // copy Undo holds instead, so the save never re-adds its row.
   function handleSave(input: { type: NoteType; text: string; month: YearMonth }) {
     if (!editing) return
     const previous = notes.find((n) => n.id === editing.id) ?? editing
     const id = previous.id
     const moving = input.month.year !== month.year || input.month.month !== month.month
     const update: NoteUpdate = {}
-    // The user's changes are measured against the copy the Composer opened with:
-    // a refresh may have replaced `previous` with a newer one from Muse, and
-    // fields the user left alone must not undo it.
     if (input.type !== editing.type) update.type = input.type
     if (input.text !== editing.text) update.text = input.text
     if (moving) update.moveTo = input.month
@@ -247,7 +210,6 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
         if (e.message === 'API error: 404') {
           localChanges.current?.deleted.add(id)
           setNotes((prev) => prev.filter((n) => n.id !== id))
-          // Undo must not bring back a row the server no longer has.
           if (pending.current?.note.id === id) {
             clearTimeout(pending.current.timer)
             pending.current = null
@@ -280,13 +242,10 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
     setNotes((prev) => prev.filter((n) => n.id !== note.id))
     pending.current = { note, timer: setTimeout(sendPendingDelete, UNDO_MS) }
     setPendingNote(note)
-    // The Undo toast takes the slot from a "moved" notice.
     if (noticeTimer.current) clearTimeout(noticeTimer.current)
     setNotice(null)
   }
 
-  // The delete needs the ID token, so send it while still signed in rather
-  // than leaving it to the unmount flush, which runs after sign-out.
   async function handleSignOut() {
     await sendPendingDelete()
     await signOut(auth)
@@ -334,10 +293,8 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
       <main
         ref={mainRef}
         className="mx-auto max-w-2xl px-4 pt-4"
-        // Room for the last note to scroll above the Composer.
         style={{ paddingBottom: `calc(${composerHeight}px + 4rem)` }}
       >
-        {/* Not role="status": the Undo toast owns that role. */}
         <div
           aria-live="polite"
           style={{ height: pull.state === 'refreshing' ? REFRESHING_HEIGHT : pull.distance }}
@@ -409,10 +366,6 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
                           key={note.id}
                           note={note}
                           onDelete={() => handleDelete(note)}
-                          // Tapping the note that's already open keeps the copy
-                          // it opened with: the Composer doesn't reload it, so a
-                          // refreshed copy here would turn its stale fields into
-                          // changes and undo Muse's update.
                           onEdit={() => setEditing((cur) => (cur?.id === note.id ? cur : note))}
                           editing={editing?.id === note.id}
                           editDisabled={savingIds.has(note.id)}
@@ -436,8 +389,6 @@ export default function MonthPage({ month, onNavigate }: MonthPageProps) {
       </main>
 
       {(pendingNote || notice) && (
-        // Sits just above the Composer: its measured height (which includes the
-        // safe-area padding) plus the keyboard inset that lifts it.
         <div
           role="status"
           style={

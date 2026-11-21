@@ -1,7 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { signIn } from '../fixtures/auth'
 
-// The emulator keeps data between tests, so note texts are made unique per run.
 const run = Date.now()
 
 async function typeLines(page: import('@playwright/test').Page, lines: string[]) {

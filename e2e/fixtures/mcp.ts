@@ -1,6 +1,5 @@
 import { expect, type APIRequestContext } from '@playwright/test'
 
-// Matches OWLET_API_TOKEN in backend/.env.e2e (a test value, not a secret).
 export const API_TOKEN = `e2e-api-token-${'x'.repeat(50)}`
 export const API_URL = 'http://localhost:8090'
 
@@ -25,8 +24,6 @@ export async function callMcpTool(
   return res.text()
 }
 
-// The first content text of the JSON-RPC result, whether the body is plain JSON
-// or an SSE stream ("event: message\ndata: {...}").
 export function parseToolText(body: string): string {
   const data = body.trimStart().startsWith('{')
     ? body

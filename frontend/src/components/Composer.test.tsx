@@ -46,6 +46,7 @@ describe('Composer', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     uninstallFakeResizeObserver()
   })
 
@@ -146,7 +147,6 @@ describe('Composer', () => {
   })
 
   it('re-measures the box when switching between adding and editing', () => {
-    // jsdom has no layout: give the box 24px lines and a scrollHeight of one line per row of text.
     const sheet = document.createElement('style')
     sheet.textContent = 'textarea { line-height: 24px; padding: 8px 0; }'
     document.head.append(sheet)
@@ -188,6 +188,41 @@ describe('Composer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add note' }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'Add note' })).toBeEnabled())
     expect(screen.getByRole('textbox', { name: 'New note' })).toHaveValue('Trip')
+    expect(screen.getByRole('textbox', { name: 'New note' })).toHaveFocus()
+    expect(localStorage.getItem(LAST_TYPE_KEY)).toBeNull()
+  })
+
+  it('keeps the text when adding throws synchronously', async () => {
+    const onAdd = vi.fn(() => {
+      throw new Error('boom')
+    })
+    render(composer({ onAdd }))
+    type('Trip')
+    fireEvent.click(screen.getByRole('button', { name: 'Add note' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Add note' })).toBeEnabled())
+    expect(screen.getByRole('textbox', { name: 'New note' })).toHaveValue('Trip')
+    expect(localStorage.getItem(LAST_TYPE_KEY)).toBeNull()
+  })
+
+  it('starts on event when localStorage.getItem throws', () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('blocked')
+    })
+    render(composer())
+    expect(screen.getByRole('button', { name: 'event' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('still adds the note when localStorage.setItem throws', async () => {
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('blocked')
+    })
+    const onAdd = vi.fn().mockResolvedValue(undefined)
+    render(composer({ onAdd }))
+    fireEvent.click(screen.getByRole('button', { name: 'next' }))
+    type('Run')
+    fireEvent.click(screen.getByRole('button', { name: 'Add note' }))
+    expect(onAdd).toHaveBeenCalledWith({ type: 'next', text: 'Run' })
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'New note' })).toHaveValue(''))
   })
 
   it('remembers the last used type', async () => {
@@ -215,7 +250,6 @@ describe('Composer', () => {
     const onHeightChange = vi.fn()
     const { container, unmount } = render(composer({ onHeightChange }))
     expect(onHeightChange).toHaveBeenLastCalledWith(112)
-    // The note box is observed too, for width changes.
     expect(observedElements()).toContain(container.querySelector('form'))
 
     setFormHeight(208)

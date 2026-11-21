@@ -2,28 +2,20 @@ import { useRef, useState } from 'react'
 import type { TouchEvent } from 'react'
 import type { Note } from '../notes'
 
-// How far left (px) a swipe must travel before letting go deletes the note.
 const DELETE_THRESHOLD = 100
 
 interface NoteRowProps {
   note: Note
   onDelete: () => void
   onEdit: () => void
-  // This note is open in the composer.
   editing: boolean
-  // Its edit is being saved, so it can't be opened again.
   editDisabled: boolean
 }
 
 export default function NoteRow({ note, onDelete, onEdit, editing, editDisabled }: NoteRowProps) {
   const [offset, setOffset] = useState(0)
   const start = useRef<{ x: number; y: number } | null>(null)
-  // Decided on the first real movement: a horizontal drag swipes the row, a
-  // vertical one is page scrolling and is left alone.
   const direction = useRef<'horizontal' | 'vertical' | null>(null)
-  // Set once a touch turns into a swipe or drag, so the click the browser fires
-  // after touchend doesn't also open the note. Cleared by the next touchstart,
-  // not touchend, because the click comes after it.
   const moved = useRef(false)
 
   function handleTouchStart(e: TouchEvent) {
@@ -78,8 +70,6 @@ export default function NoteRow({ note, onDelete, onEdit, editing, editDisabled 
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        // A canceled gesture (system interrupt, incoming call) is not a finished
-        // swipe, so it never deletes.
         onTouchCancel={resetGesture}
         style={{ transform: `translateX(${offset}px)` }}
         className={`relative flex min-h-11 items-start gap-2 px-4 py-2 touch-pan-y ${
@@ -105,9 +95,6 @@ export default function NoteRow({ note, onDelete, onEdit, editing, editDisabled 
             agent
           </span>
         )}
-        {/* On touch-only devices the swipe is the visible way to delete, but the
-            swipe is raw touch that screen readers can't perform, so the button
-            stays in the accessibility tree (sr-only) and shows when focused. */}
         <button
           type="button"
           onClick={onDelete}

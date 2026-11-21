@@ -7,7 +7,6 @@ export type PullState = 'idle' | 'pulling' | 'armed' | 'refreshing'
 interface Options {
   onRefresh: () => void
   enabled: boolean
-  // Owned by the caller: while true, new touches are ignored.
   refreshing: boolean
 }
 
@@ -16,19 +15,14 @@ export function usePullToRefresh(
   options: Options
 ): { distance: number; state: PullState } {
   const [distance, setDistance] = useState(0)
-  // The listeners subscribe once, so they read the latest options from here.
   const latest = useRef(options)
   useLayoutEffect(() => {
     latest.current = options
   })
   const start = useRef<{ x: number; y: number } | null>(null)
-  // Decided on the first real movement, as in NoteRow: only a vertical drag can
-  // pull; a horizontal one is a swipe and is left alone.
   const direction = useRef<'horizontal' | 'vertical' | null>(null)
-  // The distance now, for touchend to read without waiting for a render.
   const current = useRef(0)
 
-  // The ref must point at an always-mounted element: the effect subscribes once.
   useEffect(() => {
     const el = ref.current
     if (!el) return
@@ -44,15 +38,12 @@ export function usePullToRefresh(
       reset()
       if (!latest.current.enabled || latest.current.refreshing) return
       if (e.touches.length !== 1) return
-      // A touch that begins scrolled down never pulls, even if the page reaches
-      // the top during it: with no start point, the rest of the touch is ignored.
       if (window.scrollY > 0) return
       start.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
     }
 
     function handleTouchMove(e: TouchEvent) {
       if (!start.current) return
-      // A second finger (a pinch) or a page that has scrolled ends the pull.
       if (e.touches.length !== 1 || window.scrollY > 0) {
         reset()
         return
@@ -62,14 +53,12 @@ export function usePullToRefresh(
       const dy = t.clientY - start.current.y
       if (direction.current === null && Math.max(Math.abs(dx), Math.abs(dy)) > 8) {
         direction.current = Math.abs(dx) > Math.abs(dy) ? 'horizontal' : 'vertical'
-        // Horizontal drags and upward scrolls are not ours for the rest of the touch.
         if (direction.current === 'horizontal' || dy <= 0) {
           start.current = null
           return
         }
       }
       if (direction.current !== 'vertical') return
-      // Stop the browser's own overscroll bounce only while we are pulling.
       e.preventDefault()
       current.current = pullDistance(dy)
       setDistance(current.current)
@@ -84,8 +73,6 @@ export function usePullToRefresh(
     }
 
     el.addEventListener('touchstart', handleTouchStart, { passive: true })
-    // Not passive: React's touch handlers are, and a passive listener can't stop
-    // the iOS bounce.
     el.addEventListener('touchmove', handleTouchMove, { passive: false })
     el.addEventListener('touchend', handleTouchEnd, { passive: true })
     el.addEventListener('touchcancel', reset, { passive: true })

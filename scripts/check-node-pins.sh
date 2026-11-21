@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# Fails unless every Node version pin in the repo is exactly the expected one:
-# both Dockerfile stages, every setup-node step, and the Volta pins.
-# Usage: scripts/check-node-pins.sh [expected-version]   (default 24.22.3)
 set -euo pipefail
 
 expected="${1:-24.22.3}"
@@ -9,7 +6,6 @@ cd "$(dirname "$0")/.."
 
 bad=0
 
-# check <label> <want-count> <pattern> <good-value-regex> <files...>
 check() {
   local label="$1" want="$2" pattern="$3" good="$4"
   shift 4

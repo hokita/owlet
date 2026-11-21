@@ -4,7 +4,6 @@ import type { NoteUpdate } from './noteInput'
 export const NOTE_TYPES = ['event', 'learn', 'next'] as const
 export type NoteType = (typeof NOTE_TYPES)[number]
 
-// Where a note came from: the app, or an agent using the API token.
 export type NoteSource = 'app' | 'api'
 
 export interface Note {
@@ -15,7 +14,6 @@ export interface Note {
   createdAt: string
 }
 
-// One review doc per month, keyed `YYYY-MM`, so "one review per month" can't race.
 function reviewRef(year: number, month: number) {
   const id = `${year}-${String(month).padStart(2, '0')}`
   return getFirestore().collection('reviews').doc(id)
@@ -26,7 +24,6 @@ function toNote(id: string, data: FirebaseFirestore.DocumentData): Note {
     id,
     type: data.type as NoteType,
     text: data.text as string,
-    // Notes saved before `source` existed came from the app.
     source: data.source === 'api' ? 'api' : 'app',
     createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
   }
@@ -56,8 +53,6 @@ export async function deleteNote(year: number, month: number, id: string): Promi
   await reviewRef(year, month).collection('notes').doc(id).delete()
 }
 
-// Edits a note in place, or moves it to another month (same id, createdAt and source).
-// Returns where the note now lives, or null if it doesn't exist.
 export async function updateNote(
   year: number,
   month: number,
@@ -80,7 +75,6 @@ export async function updateNote(
     const stored = snap.data() as FirebaseFirestore.DocumentData
 
     if (!moveTo) {
-      // Firestore rejects an empty update, so a no-op edit writes nothing.
       if (Object.keys(fields).length > 0) tx.update(noteRef, fields)
       return { year, month, note: toNote(id, { ...stored, ...fields }) }
     }
@@ -98,7 +92,6 @@ export async function updateNote(
       { year: moveTo.year, month: moveTo.month, updatedAt: FieldValue.serverTimestamp() },
       { merge: true }
     )
-    // create() fails if a note with this id already exists in the target month.
     tx.create(target.collection('notes').doc(id), moved)
     return { year: moveTo.year, month: moveTo.month, note: toNote(id, moved) }
   })

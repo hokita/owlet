@@ -1,7 +1,5 @@
 import { act } from '@testing-library/react'
 
-// jsdom has neither ResizeObserver nor layout. This installs a fake observer
-// that tests trigger by hand, and stubs every form's offsetHeight.
 let installed: FakeResizeObserver[] | null = null
 let formHeight = 0
 
@@ -43,7 +41,6 @@ export function installFakeResizeObserver() {
   })
 }
 
-// Safe to call when nothing is installed, e.g. from a shared afterEach.
 export function uninstallFakeResizeObserver() {
   if (!installed) return
   installed = null
@@ -55,12 +52,10 @@ export function setFormHeight(height: number) {
   formHeight = height
 }
 
-// Elements some live observer is still watching.
 export function observedElements(): Element[] {
   return (installed ?? []).flatMap((o) => [...o.targets])
 }
 
-// Runs every observer's callback, as a layout change would.
 export function triggerResize() {
   act(() => (installed ?? []).forEach((o) => o.fire()))
 }
