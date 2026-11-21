@@ -61,7 +61,6 @@ describe('listNotes', () => {
     const notes = await listNotes(2026, 3)
 
     expect(orderBy).toHaveBeenCalledWith('reviews/2026-03/notes', 'createdAt', 'asc')
-    // Notes saved before `source` existed read as 'app'.
     expect(notes).toEqual([
       {
         id: 'n1',
@@ -120,7 +119,6 @@ describe('updateNote', () => {
   const stored = { type: 'event', text: 'Trip', source: 'api', createdAt: now }
   const path = 'reviews/2026-11/notes/n1'
 
-  // The transaction reads the note by path; only the stored one exists.
   function stubStored(data: Record<string, unknown> | null) {
     tx.get.mockImplementation(async (ref: { path: string }) => ({
       exists: data !== null && ref.path === path,

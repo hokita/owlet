@@ -12,7 +12,6 @@ function internalError(res: Response, message: string, err: unknown) {
   res.status(500).json({ error: 'Internal error' })
 }
 
-// userAuth (the Firebase sign-in) guards every route.
 export function createReviewsRouter({ userAuth }: { userAuth: RequestHandler }): Router {
   const router = Router()
 

@@ -25,7 +25,6 @@ const note = {
   createdAt: '2026-11-15T00:00:00.000Z',
 }
 
-// The limiter each test server uses; tests swap it to exercise the limit.
 let limiter: RateLimiter
 let server: Server
 let url: URL

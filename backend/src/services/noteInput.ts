@@ -1,12 +1,8 @@
 import { NOTE_TYPES } from './reviews'
 import type { NoteType } from './reviews'
 
-// Input checks shared by the REST routes and the MCP tools, so both accept
-// exactly the same notes.
-
 const MAX_TEXT_LENGTH = 500
 
-// Accepts numbers (MCP) or numeric strings (route params).
 export function parseYearMonth(
   rawYear: unknown,
   rawMonth: unknown
@@ -22,8 +18,6 @@ function isNoteType(value: unknown): value is NoteType {
   return (NOTE_TYPES as readonly unknown[]).includes(value)
 }
 
-// Line breaks are kept as "\n"; the whole text is trimmed and runs of blank
-// lines (whitespace-only lines included) collapse to a single blank line.
 export function normalizeNoteText(value: string): string {
   return value
     .replace(/\r\n?/g, '\n')
@@ -31,7 +25,6 @@ export function normalizeNoteText(value: string): string {
     .replace(/\n[ \t]*\n(?:[ \t]*\n)+/g, '\n\n')
 }
 
-// Checks the length after normalizing, so a line break counts as one character.
 function parseText(value: unknown): string | null {
   if (typeof value !== 'string') return null
   const text = normalizeNoteText(value)
@@ -57,8 +50,6 @@ export interface NoteUpdate {
   moveTo?: { year: number; month: number }
 }
 
-// Every field is optional, but one that is present must be valid. Unknown
-// fields (such as source) are dropped, so an edit cannot change them.
 export function parseNoteUpdate(input: { type?: unknown; text?: unknown; moveTo?: unknown }):
   | { ok: true; update: NoteUpdate }
   | {
@@ -88,7 +79,6 @@ export function parseNoteUpdate(input: { type?: unknown; text?: unknown; moveTo?
   return { ok: true, update }
 }
 
-// A Firestore doc id: a "/" would point the delete at a different path.
 export function parseNoteId(id: unknown): string | null {
   if (typeof id !== 'string' || !id || id.includes('/')) return null
   return id

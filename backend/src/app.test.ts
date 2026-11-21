@@ -88,7 +88,6 @@ describe('app', () => {
       return auth ? req.set('Authorization', auth) : req
     }
 
-    // A real MCP client against the app listening on a free port.
     async function withClient<T>(
       app: ReturnType<typeof createApp>,
       run: (client: Client) => Promise<T>

@@ -29,13 +29,13 @@ describe('normalizeNoteText', () => {
   it.each([
     ['a\r\nb', 'a\nb'],
     ['a\rb', 'a\nb'],
-    ['  \n a\nb \n\n', 'a\nb'], // whole-text trim (leading spaces of line 1 too)
+    ['  \n a\nb \n\n', 'a\nb'],
     ['a\n\n\nb', 'a\n\nb'],
     ['a\n\n\n\n\nb', 'a\n\nb'],
-    ['a\n \n\t\n  \nb', 'a\n\nb'], // whitespace-only lines count as blank
+    ['a\n \n\t\n  \nb', 'a\n\nb'],
     ['a\r\n\r\n\r\nb', 'a\n\nb'],
-    ['a\n\nb', 'a\n\nb'], // one blank line is kept
-    ['head\n  - sub', 'head\n  - sub'], // indentation kept
+    ['a\n\nb', 'a\n\nb'],
+    ['head\n  - sub', 'head\n  - sub'],
   ])('%j → %j', (input, expected) => {
     expect(normalizeNoteText(input)).toBe(expected)
   })
