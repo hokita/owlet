@@ -12,21 +12,25 @@ const COUNTER_FROM = 400
 
 const LAST_TYPE_KEY = 'owlet.lastNoteType'
 
-function loadLastType(): NoteType {
+function readStoredType(): string | null {
   try {
-    const stored = localStorage.getItem(LAST_TYPE_KEY)
-    if ((NOTE_TYPES as readonly string[]).includes(stored ?? '')) return stored as NoteType
+    return localStorage.getItem(LAST_TYPE_KEY)
   } catch {
-    // ignore
+    return null
   }
-  return 'event'
 }
 
-function saveLastType(type: NoteType) {
+function loadLastType(): NoteType {
+  const stored = readStoredType()
+  return (NOTE_TYPES as readonly string[]).includes(stored ?? '') ? (stored as NoteType) : 'event'
+}
+
+function saveLastType(type: NoteType): boolean {
   try {
     localStorage.setItem(LAST_TYPE_KEY, type)
+    return true
   } catch {
-    // ignore
+    return false
   }
 }
 
@@ -114,16 +118,16 @@ export default function Composer({
     const trimmed = draft.trim()
     if (!trimmed || sending) return
     setSending(true)
-    try {
-      await onAdd({ type, text: trimmed })
+    const added = await (async () => onAdd({ type, text: trimmed }))().then(
+      () => true,
+      () => false
+    )
+    if (added) {
       setText((current) => (current === draft ? '' : current))
       saveLastType(type)
-    } catch {
-      // The page shows the error; keep the text so it can be resent.
-    } finally {
-      setSending(false)
-      inputRef.current?.focus()
     }
+    setSending(false)
+    inputRef.current?.focus()
   }
 
   const activeLength = (editing ? editText : text).length
