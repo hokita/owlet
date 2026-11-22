@@ -36,6 +36,16 @@ I tried the fixes on scratch copies of the lockfiles. Each gives **0 high+, prod
 - **The spec's "vitest ≥3.2.6" is no longer enough.** GHSA-82fw-gwwq-j7x9 covers vitest `>=2.1.0 <4.1.11` (and 5 betas), and tinypool `<2.1.2` (GHSA-85c8-ppgw-ccpr) is critical. vitest 4.1.12 is outside both (no tinypool) and clears the audit in both dirs, same as corgi and aoharu (checked 2026-11-22, replacing the earlier vitest 5 choice).
 - The frontend imports only `firebase/app` and `firebase/auth`, so Firestore and grpc-js are never in the bundle. No test loads grpc-js. PR B says so plainly.
 - Still unknown: Trivy's findings on the backend image (Alpine packages, the npm bundled in `node:24.22.3-alpine`). PR A's draft run finds them.
+- PR A draft run (2026-11-22, https://github.com/hokita/owlet/actions/runs/44985328559):
+  - `Audit prod (frontend)` red (5 high, expected). `Audit prod (backend)` green. Frontend, Backend and E2E green.
+  - `Image scan (backend)` red: Alpine 3.24.4 OS layer has 0 findings. All 6 high findings are in the npm bundled in the base image, `usr/local/lib/node_modules/npm/node_modules/`, and all have a fixed version:
+    - brace-expansion 5.0.9 → 5.0.10, CVE-2026-102276
+    - brace-expansion 5.0.9 → 5.0.11, CVE-2026-102278
+    - undici 6.28.0 → 6.29.1, CVE-2026-109383
+    - undici 6.28.0 → 6.29.1, CVE-2026-109869
+    - undici 6.28.0 → 6.28.1, CVE-2026-19534
+    - undici 6.28.0 → 6.29.1, CVE-2026-87018
+  - Step 5 (prove Trivy can fail) is not needed: the scan is already red.
 
 ## Review Focus
 
