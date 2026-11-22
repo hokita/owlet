@@ -99,7 +99,7 @@ I tried the fixes on scratch copies of the lockfiles. Each gives **0 high+, prod
 
 ### Task C1: backend vitest 4.1.12
 
-**Files:** Modify `backend/package.json`, `backend/package-lock.json`, and test files only if vitest 5 needs it
+**Files:** Modify `backend/package.json`, `backend/package-lock.json`, and test files only if vitest 4 needs it
 
 - [ ] Red: in `backend/`, `npm audit --audit-level=high` → exit 1 (2 crit, 1 high). Record the test count.
 - [ ] Set `"vitest": "^4.1.12"` and run `npm install`.
