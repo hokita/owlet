@@ -104,3 +104,72 @@ test('fails for a trailing comment after a SHA', () => {
   assert.equal(r.status, 1)
   assert.equal(r.stdout.trim().split('\n').length, 2)
 })
+
+function unsupportedCount(r) {
+  return r.stdout.split('\n').filter((l) => l.includes('unsupported uses syntax:')).length
+}
+
+test('flags flow-style uses as unsupported', () => {
+  const r = run({
+    'ci.yml': workflow(
+      '      - {uses: actions/checkout@v4}',
+      `      - { uses: actions/checkout@${sha} }`,
+      `      - { "uses": actions/checkout@${sha} }`,
+    ),
+  })
+  assert.equal(r.status, 1)
+  assert.equal(unsupportedCount(r), 3)
+})
+
+test('flags double-quoted uses key as unsupported', () => {
+  const r = run({ 'ci.yml': workflow(`      - "uses": actions/checkout@${sha}`) })
+  assert.equal(r.status, 1)
+  assert.equal(unsupportedCount(r), 1)
+})
+
+test('flags single-quoted uses key as unsupported', () => {
+  const r = run({ 'ci.yml': workflow(`      - 'uses': actions/checkout@${sha}`) })
+  assert.equal(r.status, 1)
+  assert.equal(unsupportedCount(r), 1)
+})
+
+test('flags explicit ? uses key as unsupported', () => {
+  const r = run({
+    'ci.yml': workflow('      ? uses', '      : actions/checkout@v4', '      - ? "uses"', '        : x'),
+  })
+  assert.equal(r.status, 1)
+  assert.equal(unsupportedCount(r), 2)
+})
+
+test('flags quoted keys with backslash escapes as unsupported', () => {
+  const r = run({
+    'ci.yml': workflow(
+      `      - "\\x75ses": actions/checkout@${sha}`,
+      `      - "\\u0075ses": actions/checkout@${sha}`,
+    ),
+  })
+  assert.equal(r.status, 1)
+  assert.equal(unsupportedCount(r), 2)
+})
+
+test('flags commented-out uses lines as unsupported', () => {
+  const r = run({
+    'ci.yml': workflow('      # - uses: actions/checkout@v4', '    #uses: x'),
+  })
+  assert.equal(r.status, 1)
+  assert.equal(unsupportedCount(r), 2)
+})
+
+test('ignores keys that only contain the word', () => {
+  const r = run({
+    'ci.yml': workflow('      excuses: x', '      reuses: y', '      uses_x: z', '      - name: what this uses'),
+  })
+  assert.equal(r.status, 0)
+  assert.equal(r.stdout, '')
+})
+
+test('reports unsupported lines as file:line', () => {
+  const r = run({ 'ci.yml': workflow('      - {uses: actions/checkout@v4}') })
+  assert.equal(r.status, 1)
+  assert.equal(r.stdout, `unsupported uses syntax: ${path.join(r.dir, 'ci.yml')}:4\n`)
+})
