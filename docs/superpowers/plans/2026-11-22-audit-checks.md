@@ -31,9 +31,9 @@
 | e2e | 0 | 0 (14 moderate) |
 
 I tried the fixes on scratch copies of the lockfiles. Each gives **0 high+, prod and dev**:
-- frontend: `firebase ^12.19.0`, `overrides {"@grpc/grpc-js": "1.14.7"}`, `vite ^6.4.6`, `vitest ^5.1.1`, `@vitejs/plugin-react` stays `^4.7.0`. `npm ls` shows `@grpc/grpc-js@1.14.7 overridden` only.
-- backend: `vitest ^5.1.1`, which pulls vite 8.3.8.
-- **The spec's "vitest ≥3.2.6" is no longer enough.** GHSA-82fw-gwwq-j7x9 (critical) covers vitest ≤4.1.10, and tinypool ≤2.1.1 stays critical. The only fixed line is vitest 5.
+- frontend: `firebase ^12.19.0`, `overrides {"@grpc/grpc-js": "1.14.7"}`, `vite ^6.4.6`, `vitest ^4.1.12`, `@vitejs/plugin-react` stays `^4.7.0`. `npm ls` shows `@grpc/grpc-js@1.14.7 overridden` only.
+- backend: `vitest ^4.1.12`, which pulls vite 8.3.8.
+- **The spec's "vitest ≥3.2.6" is no longer enough.** GHSA-82fw-gwwq-j7x9 covers vitest `>=2.1.0 <4.1.11` (and 5 betas), and tinypool `<2.1.2` (GHSA-85c8-ppgw-ccpr) is critical. vitest 4.1.12 is outside both (no tinypool) and clears the audit in both dirs, same as corgi and aoharu (checked 2026-11-22, replacing the earlier vitest 5 choice).
 - The frontend imports only `firebase/app` and `firebase/auth`, so Firestore and grpc-js are never in the bundle. No test loads grpc-js. PR B says so plainly.
 - Still unknown: Trivy's findings on the backend image (Alpine packages, the npm bundled in `node:24.22.3-alpine`). PR A's draft run finds them.
 
@@ -41,7 +41,7 @@ I tried the fixes on scratch copies of the lockfiles. Each gives **0 high+, prod
 
 1. **A gate looks green but checked nothing** (wrong `working-directory`, Trivy scanning an image tag that wasn't built, a matrix that skipped a dir). Expected: each job's log names the directory or image it scanned. Task D4's red demo proves the prod audit fails for real. Task A1 Step 5 proves Trivy fails for real.
 2. **The image build differs from the deployed one** (PR scan builds `backend/` with another context or stage). Expected: the PR scan uses `docker build backend` with the same Dockerfile `backend.yml` uses. The nightly scans the serving revision's `imageDigest`, not `:latest`.
-3. **vitest 5 / firebase 12 changes behaviour silently** (tests that stop running, auth flows that change). Expected: the test count after the change is at least the count before, and e2e sign-in passes. Tasks B1 and C1/C2 record both counts.
+3. **vitest 4 / firebase 12 changes behaviour silently** (tests that stop running, auth flows that change). Expected: the test count after the change is at least the count before, and e2e sign-in passes. Tasks B1 and C1/C2 record both counts.
 4. **Node runtime check compares the wrong things** (`v24.22.3` vs `24.22.3`, string order `24.22.10` < `24.22.9`, a newer *non-security* release, or a newer major). Expected: only a newer v24 release with `security: true` fails. Task D2's tests pin all four.
 5. **The pin checker misses a form** (`uses: ./local`, `docker://`, quoted values, indented `- uses:` in a list). Expected: local `./` paths pass, a `docker://` without a digest fails, and quoted and list forms are parsed. Task A2's tests pin these.
 
@@ -97,20 +97,20 @@ I tried the fixes on scratch copies of the lockfiles. Each gives **0 high+, prod
 
 ## PR C: `fix/audit-dev` from `main` (step 2b)
 
-### Task C1: backend vitest 5
+### Task C1: backend vitest 4.1.12
 
 **Files:** Modify `backend/package.json`, `backend/package-lock.json`, and test files only if vitest 5 needs it
 
 - [ ] Red: in `backend/`, `npm audit --audit-level=high` → exit 1 (2 crit, 1 high). Record the test count.
-- [ ] Set `"vitest": "^5.1.1"` and run `npm install`.
-- [ ] Green: run the same audit → exit 0. `npm test` count = baseline, all pass. Lint, tsc and build pass. If the vitest 4/5 migration breaks a test, change the test API usage only. The assertions stay as they are.
+- [ ] Set `"vitest": "^4.1.12"` and run `npm install`.
+- [ ] Green: run the same audit → exit 0. `npm test` count = baseline, all pass. Lint, tsc and build pass. If the vitest 2/3/4 migration breaks a test, change the test API usage only. The assertions stay as they are.
 
-### Task C2: frontend vite 6 and vitest 5
+### Task C2: frontend vite 6 and vitest 4.1.12
 
 **Files:** Modify `frontend/package.json`, `frontend/package-lock.json`, `frontend/vite.config.ts` only if needed
 
 - [ ] Red: in `frontend/` (on top of `main`, or on top of B if it's merged), `npm audit --audit-level=high` → exit 1.
-- [ ] Set `"vite": "^6.4.6"` and `"vitest": "^5.1.1"`. `@vitejs/plugin-react` stays `^4.7.0` (plugin-react 6 needs vite 8 and fails ERESOLVE). Run `npm install`.
+- [ ] Set `"vite": "^6.4.6"` and `"vitest": "^4.1.12"`. `@vitejs/plugin-react` stays `^4.7.0` (plugin-react 6 needs vite 8 and fails ERESOLVE). Run `npm install`.
 - [ ] Green: run the same audit → exit 0 once B is in. Before that, only firebase's prod findings may remain. Tests (count = baseline), lint, tsc, build and `prettier --check src` pass. e2e passes. `e2e/`: `npm audit --audit-level=high` → exit 0 (no change needed today).
 
 ## PR D: finish `chore/audit-checks` (step 3), after B and C are merged
