@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-expected="${1:-24.22.3}"
+expected="${1:-26.13.1}"
 cd "$(dirname "$0")/.."
 
 bad=0
