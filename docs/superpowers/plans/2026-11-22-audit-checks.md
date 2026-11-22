@@ -150,7 +150,7 @@ I tried the fixes on scratch copies of the lockfiles. Each gives **0 high+, prod
 
 **Files:** Create `.github/dependabot.yml`
 
-- [x] `version: 2`. npm `directories: ["/backend", "/frontend", "/e2e"]`, weekly, `open-pull-requests-limit: 0`. docker `directories: ["/backend"]`, weekly, `groups: docker: patterns: ["*"]`. github-actions `directories: ["/"]`, weekly, `groups: actions: patterns: ["*"]`.
+- [x] `version: 2`. npm `directories: ["/backend", "/frontend", "/e2e"]`, weekly, `open-pull-requests-limit: 0`. docker `directories: ["/backend"]`, weekly, `ignore: [{dependency-name: node, update-types: ["version-update:semver-major"]}]` (user policy 2026-11-22: base images get only patch/minor/digest updates of the current major; major moves such as Node 26 are planned tasks), `groups: docker: patterns: ["*"]`. github-actions `directories: ["/"]`, weekly, `groups: actions: patterns: ["*"]`.
 - [x] Verify that the file parses. After merge, the orchestrator checks in step 4 that the Insights → Dependency graph → Dependabot tab shows three ecosystems with no errors.
 
 ### Task D4: red once, then ready
