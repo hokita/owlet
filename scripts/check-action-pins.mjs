@@ -7,7 +7,7 @@ if (!dir) {
   process.exit(2)
 }
 
-const usesLine = /^\s*(?:-\s+)?uses:\s*(?:"([^"]*)"|'([^']*)'|(\S+))/
+const usesLine = /^\s*(?:-\s+)?uses:\s*(?:"([^"]*)"|'([^']*)'|(\S+))(.*)$/
 const pinned = /^[^\s/@]+\/[^\s@]+@[0-9a-f]{40}$/
 const local = /^\.\//
 const dockerDigest = /^docker:\/\/\S+@sha256:[0-9a-f]{64}$/
@@ -29,8 +29,9 @@ for (const name of files) {
     const match = usesLine.exec(line)
     if (!match) return
     const value = match[1] ?? match[2] ?? match[3]
-    if (!isPinned(value)) {
-      console.log(`${file}:${index + 1}: ${value}`)
+    const trailing = match[4].trim()
+    if (trailing !== '' || !isPinned(value)) {
+      console.log(`${file}:${index + 1}: ${(value + ' ' + trailing).trim()}`)
       failed = true
     }
   })

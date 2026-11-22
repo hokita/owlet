@@ -93,3 +93,14 @@ test('exits 2 with usage when no directory is given', () => {
   assert.equal(result.status, 2)
   assert.match(result.stderr, /usage/i)
 })
+
+test('fails for a trailing comment after a SHA', () => {
+  const r = run({
+    'ci.yml': workflow(
+      `      - uses: actions/checkout@${sha} # v4`,
+      `      - uses: "actions/setup-node@${sha}" # v4`,
+    ),
+  })
+  assert.equal(r.status, 1)
+  assert.equal(r.stdout.trim().split('\n').length, 2)
+})
