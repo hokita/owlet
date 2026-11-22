@@ -53,7 +53,7 @@ I tried the fixes on scratch copies of the lockfiles. Each gives **0 high+, prod
 2. **The image build differs from the deployed one** (PR scan builds `backend/` with another context or stage). Expected: the PR scan uses `docker build backend` with the same Dockerfile `backend.yml` uses. The nightly scans the serving revision's `imageDigest`, not `:latest`.
 3. **vitest 4 / firebase 12 changes behaviour silently** (tests that stop running, auth flows that change). Expected: the test count after the change is at least the count before, and e2e sign-in passes. Tasks B1 and C1/C2 record both counts.
 4. **Node runtime check compares the wrong things** (`v24.22.3` vs `24.22.3`, string order `24.22.10` < `24.22.9`, a newer *non-security* release, or a newer major). Expected: only a newer v24 release with `security: true` fails. Task D2's tests pin all four.
-5. **The pin checker misses a form** (`uses: ./local`, `docker://`, quoted values, indented `- uses:` in a list). Expected: local `./` paths pass, a `docker://` without a digest fails, and quoted and list forms are parsed. Task A2's tests pin these.
+5. **The pin checker misses a form** (`uses: ./local`, `docker://`, quoted values, aliases, explicit keys, flow style). Expected: it is eagle's PyYAML checker copied from 837d219, local `./` paths pass, a `docker://` without a digest fails, and unsupported syntax fails closed. Its fixtures and tests pin these.
 
 ---
 
@@ -73,15 +73,12 @@ I tried the fixes on scratch copies of the lockfiles. Each gives **0 high+, prod
 
 ### Task A2: Actions pin check
 
-**Files:** Create `scripts/check-action-pins.mjs`, `scripts/check-action-pins.test.mjs`. Modify `.github/workflows/ci.yml`.
+**Files:** Create `.github/scripts/check_action_pins.py`, `.github/scripts/test_check_action_pins.py`, `.github/scripts/requirements-pins.txt`, `.github/scripts/fixtures/pins/{bad,good}/*`. Modify `.github/workflows/ci.yml`.
 
-**Interfaces:** Produces `node scripts/check-action-pins.mjs <dir>`. It exits 0 when every `uses:` in `<dir>/*.yml` is `owner/repo[/path]@<40 hex>`, a local `./…` path, or `docker://…@sha256:<64 hex>`. Otherwise it exits 1 and prints `file:line: <value>` for each bad line. Job `action-pins`, `name: Action pins`.
+**Interfaces:** Copied as is from hokita/eagle 837d219 (PyYAML 6.0.3, hash-pinned, parser-based, fails closed on unsupported syntax). `check_action_pins.py <dir>` exits 0 when every `uses:` in `<dir>/*.yml` is `owner/repo[/path]@<40 hex>`, a local `./…` path, or `docker://…@sha256:<64 hex>`. Otherwise it exits 1 and prints `file:line: <value>`. Job `action-pins`, `name: Action pins`. It runs the Node runtime tests, installs PyYAML with `--require-hashes`, runs the checker's unit tests, then the check.
 
-- [x] Write tests (`node:test`, temp dirs with fixture workflows): `passes for a full SHA`, `fails for a tag (@v4) and a branch (@main)`, `fails for a 7-char short SHA`, `passes for ./local-action`, `fails for docker:// without a digest`, `reads quoted and "- uses:" list forms`, `reports file:line for each failure`.
-- [x] Run `node --test 'scripts/*.test.mjs'` → FAIL (the module is missing).
-- [x] Implement it with a line regex. No YAML dependency.
-- [x] Run `node --test 'scripts/*.test.mjs'` → PASS. Run `node scripts/check-action-pins.mjs .github/workflows` → exit 1, listing the current `@v4`/`@v3`/`@v6` lines (red until Task D1).
-- [x] Add the `action-pins` job (checkout, setup-node, `node --test 'scripts/*.test.mjs'` and the check). Commit and push.
+- [x] Copy the test, fixtures and requirements from eagle → tests FAIL (the checker is missing). Copy the checker → PASS, including the real-workflows test.
+- [x] Add the `action-pins` job to `ci.yml` and `audit-nightly.yml`. Commit and push.
 
 ## PR B: `fix/audit-prod` from `main` (step 2)
 
@@ -133,7 +130,7 @@ I tried the fixes on scratch copies of the lockfiles. Each gives **0 high+, prod
 
 - [x] Red: `scripts/check-node-pins.sh` passes today. Pin all three `FROM` lines to the digest in Global Constraints → the script fails (`wrong Dockerfile FROM`).
 - [x] Change its `good` regex to `^FROM node:${v}-alpine@sha256:[0-9a-f]{64}( AS [a-z]+)?$`, so it now requires the digest. Change the setup-node count from `5` to the new total (11 after D2: ci.yml 5, audit-nightly.yml 4 including its `Deployed image` job, backend.yml 1, frontend.yml 1). → green.
-- [x] Pin every `uses:` to a SHA (checkout, setup-node, setup-java, upload-artifact, google-github-actions/auth v3, docker/setup-buildx-action, docker/build-push-action). `node scripts/check-action-pins.mjs .github/workflows` → exit 0. The `Action pins` job → green.
+- [x] Pin every `uses:` to a SHA (checkout, setup-node, setup-java, upload-artifact, google-github-actions/auth v3, docker/setup-buildx-action, docker/build-push-action). `.github/scripts/check_action_pins.py .github/workflows` → exit 0. The `Action pins` job → green.
 
 ### Task D2: nightly workflow and Node runtime check
 
@@ -150,7 +147,7 @@ I tried the fixes on scratch copies of the lockfiles. Each gives **0 high+, prod
 
 **Files:** Create `.github/dependabot.yml`
 
-- [x] `version: 2`. npm `directories: ["/backend", "/frontend", "/e2e"]`, weekly, `open-pull-requests-limit: 0`. docker `directories: ["/backend"]`, weekly, `ignore: [{dependency-name: node, update-types: ["version-update:semver-major"]}]` (user policy 2026-11-22: base images get only patch/minor/digest updates of the current major; major moves such as Node 26 are planned tasks), `groups: docker: patterns: ["*"]`. github-actions `directories: ["/"]`, weekly, `groups: actions: patterns: ["*"]`.
+- [x] `version: 2`. npm `directories: ["/backend", "/frontend", "/e2e"]`, weekly, `open-pull-requests-limit: 0`. docker `directories: ["/backend"]`, weekly, `ignore: [{dependency-name: node, update-types: ["version-update:semver-major", "version-update:semver-minor"]}]` (user policy 2026-11-22: the node base image gets only patch updates of the current line; major and minor moves are planned tasks; GitHub Actions majors are not blocked), `groups: docker: patterns: ["*"]`. github-actions `directories: ["/"]`, weekly, `groups: actions: patterns: ["*"]`.
 - [x] Verify that the file parses. After merge, the orchestrator checks in step 4 that the Insights → Dependency graph → Dependabot tab shows three ecosystems with no errors.
 
 ### Task D4: red once, then ready
