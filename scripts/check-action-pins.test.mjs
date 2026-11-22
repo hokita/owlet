@@ -173,3 +173,88 @@ test('reports unsupported lines as file:line', () => {
   assert.equal(r.status, 1)
   assert.equal(r.stdout, `unsupported uses syntax: ${path.join(r.dir, 'ci.yml')}:4\n`)
 })
+
+test('flags explicit-key forms beyond same-line ? uses', () => {
+  const forms = [
+    ['      - ?', '        uses', '        : x'],
+    ['      - ? |-', '        uses', '        : x'],
+    ['      - ? >-', '        uses', '        : x'],
+    ['      - ? !!str uses', '        : x'],
+    ['      - ? &a uses', '        : x'],
+    ['      - ? "\\x75ses"', '        : x'],
+    ['      - ? "u\\', '        ses"', '        : x'],
+    ['      - ? # c', '        uses', '        : x'],
+    ['      - { ?', '        uses', '        : x }'],
+    ['      - [ ? uses : x ]'],
+  ]
+  for (const form of forms) {
+    const r = run({ 'ci.yml': workflow(...form) })
+    assert.equal(r.status, 1, form.join('|'))
+    assert.ok(unsupportedCount(r) >= 1, form.join('|'))
+  }
+})
+
+test('flags alias keys', () => {
+  const forms = [
+    ['      - *k : x'],
+    ['      - {*k : x}'],
+    ['      - { a: b, *k : x }'],
+    ['      *k : x'],
+  ]
+  for (const form of forms) {
+    const r = run({ 'ci.yml': workflow(...form) })
+    assert.equal(r.status, 1, form.join('|'))
+    assert.ok(unsupportedCount(r) >= 1, form.join('|'))
+  }
+})
+
+test('flags anchors whose value is uses', () => {
+  const forms = [['      x-k: &k uses'], ['      x-k: &k "uses"'], ["      x-k: &k 'uses'"]]
+  for (const form of forms) {
+    const r = run({ 'ci.yml': workflow(...form) })
+    assert.equal(r.status, 1, form.join('|'))
+    assert.equal(unsupportedCount(r), 1, form.join('|'))
+  }
+})
+
+test('flags continuation after a canonical uses', () => {
+  const r = run({
+    'ci.yml': workflow(`      - uses: actions/checkout@${sha}`, '          tail'),
+  })
+  assert.equal(r.status, 1)
+  assert.equal(r.stdout, `unsupported uses syntax: ${path.join(r.dir, 'ci.yml')}:4\n`)
+})
+
+test('does not flag a following key or a less indented line after uses', () => {
+  const r = run({
+    'ci.yml': workflow(
+      `      - uses: actions/checkout@${sha}`,
+      '        with:',
+      '          a: b',
+      '',
+      '      # note',
+      `      - uses: actions/cache@${sha}`,
+    ),
+  })
+  assert.equal(r.status, 0)
+  assert.equal(r.stdout, '')
+})
+
+test('flags unclosed quoted uses value', () => {
+  for (const q of ["'", '"']) {
+    const r = run({
+      'ci.yml': workflow(`      - uses: ${q}actions/checkout@${sha}`, `      tail${q}`),
+    })
+    assert.equal(r.status, 1, q)
+    assert.equal(unsupportedCount(r), 1, q)
+  }
+})
+
+test('checks uppercase yml extensions', () => {
+  const r = run({
+    'A.YML': workflow('      - uses: actions/checkout@v4'),
+    'B.Yaml': workflow('      - uses: actions/cache@v3'),
+  })
+  assert.equal(r.status, 1)
+  assert.equal(r.stdout.trim().split('\n').length, 2)
+})
