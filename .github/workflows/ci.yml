@@ -164,6 +164,9 @@ jobs:
       - name: Test the Node runtime check
         run: node --test 'scripts/*.test.mjs'
 
+      - name: Check Node pins
+        run: scripts/check-node-pins.sh
+
       - name: Install PyYAML (hash-pinned)
         run: |
           python3 -m venv "$RUNNER_TEMP/pins"
