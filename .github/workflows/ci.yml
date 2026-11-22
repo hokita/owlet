@@ -149,3 +149,16 @@ jobs:
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock
           aquasec/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb
           image --scanners vuln --severity HIGH,CRITICAL --exit-code 1 owlet-backend:ci
+
+      - name: Smoke test backend image
+        run: |
+          docker run -d --name smoke -p 8080:8080 -e FIREBASE_PROJECT_ID=demo-owlet-e2e owlet-backend:ci
+          body=""
+          for i in $(seq 1 30); do
+            if body="$(curl -fsS localhost:8080/health)"; then break; fi
+            sleep 1
+          done
+          echo "health: $body"
+          test "$body" = '{"ok":true}'
+          docker run --rm --entrypoint sh owlet-backend:ci -c 'test ! -e /usr/local/lib/node_modules/npm'
+          echo "npm absent"
