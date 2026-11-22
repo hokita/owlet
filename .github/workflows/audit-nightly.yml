@@ -1,0 +1,124 @@
+name: Audit (nightly)
+
+on:
+  schedule:
+    - cron: '20 18 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  audit-prod:
+    name: Audit prod (${{ matrix.dir }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dir: [backend, frontend]
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.22.3'
+
+      - name: Audit production dependencies
+        working-directory: ${{ matrix.dir }}
+        run: npm audit --omit=dev --audit-level=high
+
+  audit-dev:
+    name: Audit dev (${{ matrix.dir }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dir: [backend, frontend, e2e]
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.22.3'
+
+      - name: Audit all dependencies
+        working-directory: ${{ matrix.dir }}
+        run: npm audit --audit-level=high
+
+  action-pins:
+    name: Action pins
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.22.3'
+
+      - name: Test the Node runtime check
+        run: node --test 'scripts/*.test.mjs'
+
+      - name: Install PyYAML (hash-pinned)
+        run: |
+          python3 -m venv "$RUNNER_TEMP/pins"
+          "$RUNNER_TEMP/pins/bin/pip" install --require-hashes --only-binary=:all: --no-deps -r .github/scripts/requirements-pins.txt
+
+      - name: Test the pin checker
+        run: '"$RUNNER_TEMP/pins/bin/python" -m unittest discover -s .github/scripts -p "test_*.py"'
+
+      - name: Check action pins
+        run: '"$RUNNER_TEMP/pins/bin/python" .github/scripts/check_action_pins.py .github/workflows'
+
+  deployed-image:
+    name: Deployed image
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.22.3'
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          project_id: owlet-c659da
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Resolve serving image
+        run: |
+          set -euo pipefail
+          REV=$(gcloud run services describe owlet-backend --region asia-northeast1 --format='value(status.latestReadyRevisionName)')
+          IMAGE=$(gcloud run revisions describe "$REV" --region asia-northeast1 --format='value(status.imageDigest)')
+          if [ -z "$REV" ] || [ -z "$IMAGE" ]; then
+            echo "Could not resolve the serving revision or image (revision='$REV', image='$IMAGE')" >&2
+            exit 1
+          fi
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+          echo "Serving revision: $REV"
+          echo "Serving image: $IMAGE"
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker asia-northeast1-docker.pkg.dev --quiet
+
+      - name: Pull serving image
+        run: docker pull "$IMAGE"
+
+      - name: Scan serving image
+        run: >-
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock
+          aquasec/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb
+          image --scanners vuln --severity HIGH,CRITICAL --exit-code 1 "$IMAGE"
+
+      - name: Check Node runtime
+        run: |
+          set -euo pipefail
+          DEPLOYED=$(docker run --rm --entrypoint node "$IMAGE" --version)
+          echo "Deployed Node: $DEPLOYED"
+          curl -fsSL https://nodejs.org/dist/index.json | node scripts/check-node-runtime.mjs "$DEPLOYED"
