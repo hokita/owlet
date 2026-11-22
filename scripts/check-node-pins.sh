@@ -26,7 +26,7 @@ check() {
 }
 
 v="${expected//./\\.}"
-check "Dockerfile FROM" 2 '^FROM ' "^FROM node:${v}-alpine( AS [a-z]+)?$" backend/Dockerfile
+check "Dockerfile FROM" 3 '^FROM ' "^FROM node:${v}-alpine( AS [a-z]+)?$" backend/Dockerfile
 check "setup-node node-version" 5 'node-version:' "node-version: '${v}'$" .github/workflows/*.yml
 check "Volta node" 3 '"node":' "\"node\": \"${v}\"$" backend/package.json frontend/package.json e2e/package.json
 
