@@ -147,7 +147,7 @@ I tried the fixes on scratch copies of the lockfiles. Each gives **0 high+, prod
 
 **Files:** Create `.github/dependabot.yml`
 
-- [x] `version: 2`. npm `directories: ["/backend", "/frontend", "/e2e"]`, weekly, `open-pull-requests-limit: 0`. docker `directories: ["/backend"]`, weekly, `ignore: [{dependency-name: node, update-types: ["version-update:semver-major", "version-update:semver-minor"]}]` (user policy 2026-11-22: the node base image gets only patch updates of the current line; major and minor moves are planned tasks; GitHub Actions majors are not blocked), `groups: docker: patterns: ["*"]`. github-actions `directories: ["/"]`, weekly, `groups: actions: patterns: ["*"]`.
+- [x] `version: 2`. npm `directories: ["/backend", "/frontend", "/e2e"]`, weekly, `open-pull-requests-limit: 0`. docker `directories: ["/backend"]`, weekly, `ignore: [{dependency-name: node, update-types: ["version-update:semver-major"]}]` (user policy 2026-11-22: the node base image gets patch, minor and digest updates within Node 24, because Node security fixes often ship as 24.x minors; major moves such as Node 26 are planned tasks; GitHub Actions majors are not blocked), `groups: docker: patterns: ["*"]`. github-actions `directories: ["/"]`, weekly, `groups: actions: patterns: ["*"]`.
 - [x] Verify that the file parses. After merge, the orchestrator checks in step 4 that the Insights → Dependency graph → Dependabot tab shows three ecosystems with no errors.
 
 ### Task D4: red once, then ready
